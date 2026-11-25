@@ -75,15 +75,31 @@ These are general services — Bioma uses them too (thumbnails and types in
 the launcher's file search, the downloads cell) — so they live in Genoma's
 Rust crates, not in Rizoma. Rizoma stays pure Luau.
 
-| Service | What | Size |
-|---|---|---|
-| `files` | **operations**: copy, move, link, rename, mkdir, delete; a queue of jobs with progress (bytes, files, rate), pause, cancel, and conflicts asked back to Luau (replace / skip / keep both / for all). Rules in §6. | large |
-| `trash` | freedesktop Trash spec: `$XDG_DATA_HOME/Trash` and per-mount `.Trash-$uid`, `.trashinfo`, list, restore, empty | medium |
-| `mime` | type of a file from shared-mime-info (globs, then magic for the ambiguous), its icon name, its default and other applications from `mimeapps.list` + desktop entries, set default | medium |
-| `thumbnails` | freedesktop thumbnail spec: shared cache `~/.cache/thumbnails` (normal / large / x-large, `fail/`), images done in-process, others by the system's `.thumbnailer` files with a time limit; a queue that serves visible items first | medium |
-| D-Bus export | serve `org.freedesktop.FileManager1` (ShowFolders, ShowItems) so "show in folder" from Firefox etc. opens Rizoma. `g.dbus` is a client only today: either a general `g.dbus.serve`, or this one interface in Rust | small–medium |
-| `g.folder` at scale | check with 50 000 entries: time to first paint, memory; sort and filter in Rust if Luau is the bottleneck | measure first |
-| Shared theme file | as for the other apps | (shared) |
+All of it is built and tested (2026-11-25; Genoma's CHANGELOG, Unreleased):
+
+| Service | What Rizoma uses |
+|---|---|
+| `g.directory` | a folder read, sorted, filtered and typed off the loop, followed; `count`, `at`, `slice`, `paths`, `index`. `path`, `sort`, `descending`, `filter`, `hidden`, `folders_first` are followed functions |
+| `g.list { count, item }` | only what is in view is asked for; a grid is a list of rows |
+| `@genoma/mime` | type, description, icon, applications, `set_default` |
+| `@genoma/thumbnails` | the shared freedesktop cache; other programs' thumbnailers in bubblewrap |
+| `@genoma/files` | jobs with progress, pause, cancel and questions; rename, new folder, new file, measure |
+| `@genoma/trash` | list, restore, erase, empty, on every disk |
+| `clipboard:offer` / `:read` | `text/uri-list` and `x-special/gnome-copied-files` both ways |
+| `drag_actions`, `drop_action`, `drop.action` | copy or move by dragging |
+| `on_click` count | double click |
+| `g.dbus.serve` | `org.freedesktop.FileManager1` |
+| shared theme file | the desktop's look, live |
+
+Measured with 50 000 files (warm cache): `g.folder` and a sort in Luau
+stalled the loop 230 ms, and 50 ms more at each reading; `g.directory` shows
+the first rows after 45 ms, none of them on the loop, sorts again in 7 ms,
+and hands out 40 entries in 0.1 ms. At rest: no CPU, no wake-up.
+
+Not there yet, wanted later: a picture under the pointer while dragging, the
+files a drag holds before it is dropped, EXIF orientation in `g.image`
+(thumbnails have it), reading the beginning of a large text for the preview,
+files with names that are not UTF-8 in `apps:launch`.
 
 ## 5. Interface
 
@@ -113,9 +129,10 @@ Ctrl+Shift+N.
 
 - Never overwrite without an explicit answer; "replace" of a folder merges
   only when asked.
-- Same filesystem: `rename(2)`. Across filesystems: copy to a temporary name
-  in the destination, fsync, rename into place, and only then remove the
-  source.
+- Same filesystem: `rename(2)`, refusing a name taken. Across filesystems:
+  copy into a file with no name (`O_TMPFILE`; a hidden one where there are
+  none), put in place whole, `syncfs`, and only then remove the source, if
+  it is still what was copied.
 - Symlinks are copied as links, never followed into a loop; special files
   are skipped with a report.
 - Keep mtime and permissions; report what could not be kept.
