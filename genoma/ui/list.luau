@@ -184,9 +184,6 @@ local scrolled = g.signal(0)
 function M.new(width: () -> number, height: () -> number): any
     local function tall(): number return math.max(ROW, height() - HEAD) end
     local scroller = scroll_mark.new { height = tall, x = function() return width() - 1 end }
-    -- Which way the keys walk: the row past the one stood on is kept in view
-    -- too, so it is never read through the fading foot.
-    local before = 0
     local function at(y: number): any
         return if y >= 0 then browser.dir:at(math.floor(y / ROW) + 1) else nil
     end
@@ -254,13 +251,9 @@ function M.new(width: () -> number, height: () -> number): any
             item = function(i: number) return i end,
             key = function(i: number) return i end,
             reveal = function()
-                if band.row.value then return band.row.value end
-                local i = browser.index.value
-                if i == nil then return nil end
-                local by = if i > before then 1 elseif i < before then -1 else 0
-                before = i
-                return math.clamp(i + by, 1, math.max(1, browser.dir.count))
+                return band.row.value or browser.index.value
             end,
+            reveal_margin = scroll_mark.margin,
             row = row(width),
         }),
     }

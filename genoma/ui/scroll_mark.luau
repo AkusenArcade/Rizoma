@@ -9,6 +9,10 @@ local M = {}
 
 local FADE, WIDTH, REST = 28, 3, 0.5
 
+-- What is brought into view is clear of the fade. (A Genoma that has no drag
+-- picture has no margin either.)
+M.margin = if g.drag_picture then FADE else nil
+
 -- `t`: height() the view's, x() where the mark stands, room() how far it can
 -- be scrolled (what follow() was last told, when not given). Gives `follow(offset,
 -- room)` for the scroller's on_scroll, `fade()` for its fade_bottom, `offset()`

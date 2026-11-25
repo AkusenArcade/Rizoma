@@ -45,10 +45,28 @@ Principles carried over from Bioma, where they make sense in an app:
   launcher does).
 - Preview: images, text, PDF first page, video frame (from thumbnails).
 
-**Later:** split view, batch rename, archives (open as folders, compress),
+**Must have (Akusen, 2026-11-25), in v1:**
+
+- **Open in the terminal**: from the right button's menu, the folder stood on
+  (a file's: the folder around it; on the ground: the one shown) in the default
+  terminal, as applications that ask for one are started (`xdg-terminal-exec`,
+  else `$TERMINAL`, else the usual ones). Genoma has the choice inside
+  `apps:launch`; it has to offer it: a folder, no application.
+- **Two panes**: two folders side by side, each with its own way, selection and
+  view; the focused one takes the keys; copying and moving from one to the
+  other by key and by dragging. `core/browser` and `core/selection` are one of
+  each for the whole window today: they become one for each pane first.
+- **Tabs**: several folders in a window, each with its way back; opened from a
+  folder (middle button, the menu), moved, closed; a drag held over one opens
+  it. A tab holds one or two panes.
+- **Colours**: files and folders marked with one of a few colours, seen in both
+  views and the preview, set from the menu and by key, and filtered by. Where a
+  colour is kept is to be decided (below).
+
+**Later:** batch rename, archives (open as folders, compress),
 undo of the last operation, network places through gvfs mounts, the
 `xdg-desktop-portal` FileChooser backend (every app's Open dialog drawn by
-Rizoma), tags/colours.
+Rizoma).
 
 **Not planned:** an indexer of its own, cloud accounts.
 
@@ -96,8 +114,7 @@ stalled the loop 230 ms, and 50 ms more at each reading; `g.directory` shows
 the first rows after 45 ms, none of them on the loop, sorts again in 7 ms,
 and hands out 40 entries in 0.1 ms. At rest: no CPU, no wake-up.
 
-Not there yet, wanted later: a picture under the pointer while dragging, the
-files a drag holds before it is dropped, EXIF orientation in `g.image`
+Not there yet, wanted later: the files a drag holds before it is dropped, EXIF orientation in `g.image`
 (thumbnails have it), reading the beginning of a large text for the preview,
 files with names that are not UTF-8 in `apps:launch`.
 
@@ -111,7 +128,7 @@ As built (2026-11-25). No title bar, as every Genoma app:
 │ bookmarks│   grid or list, straight on the window's ground
 │ computer │
 │          │
-└──────────┘ (what is stood on · a notice · the filter)   (view)
+└──────────┘ [filter][preview] (what is stood on · a notice)  (view)
 ```
 
 - **The path is a rhizome**: each folder a capsule, a thread between them.
@@ -127,8 +144,16 @@ As built (2026-11-25). No title bar, as every Genoma app:
   put away (F9), a button they grow from and float over the folder.
 - **View**: a button at the foot's right, and the cell that grows from it:
   grid or list, order, reversed, folders first, hidden files, places, size.
-- **Foot**: nothing at rest. What is stood on (the grid only: the list says it
-  in its columns), a notice, the filter typed over the folder.
+- **The top stays as clean as it is** (Akusen, 2026-11-25): the ways and the
+  path, whose capsules bud. What else does something is a button in the foot,
+  on the left; the cell of the view is on its right.
+- **Buttons** (`ui.action`): what does one thing is a Bioma button, 32 tall as
+  the path's capsules: outline (plain, filled while it is on), filled (does
+  what is asked), dashed (makes something new: new folder, new tab). Only what
+  opens a menu or a panel looks like a cell.
+- **Foot**: FILTER, which becomes the field it opens, and PREVIEW; then what is
+  stood on (the grid only: the list says it in its columns) or a notice. In a
+  narrow window the buttons keep their drawing only.
 - **Preview** (space, or the view cell): a pane that grows from the entry stood
   on and goes back to it. Pinned beside the folder where both have room (660),
   floating on the side the entry is not where they do not. Pictures (moving
@@ -146,7 +171,8 @@ As built (2026-11-25). No title bar, as every Genoma app:
   and what is no longer shown is no longer selected.
 - **Exchange**: Ctrl+C offers `text/uri-list`, `x-special/gnome-copied-files`
   and the paths as text; dragged out, what is selected is given to be copied,
-  never to be moved. 50 000 selected in 30 ms, copied in 75.
+  never to be moved; under the pointer the first of it, one over the other,
+  and its name or how many. 50 000 selected in 30 ms, copied in 75.
 
 Responsive by the window's size: the sidebar collapses to a button, the list
 loses its type, then its date, then its size; the grid's columns are computed
@@ -193,15 +219,18 @@ text it is.
 3. **Selection and exchange**: selection in every form, copy/paste and
    drag with other programs (Rizoma only *gives* files out at this stage).
 4. **`files` in Genoma**: the operations service and its test suite —
-   alone, headless, until it passes. Then Rizoma's paste, drop, rename,
-   new folder and the operations panel.
+   alone, headless, until it passes (done, 2026-11-25). Then Rizoma's paste,
+   drop, rename, new folder and the operations panel; the menu of the right
+   button (and of a long press), with *Open with* and *Open in the terminal*.
 5. **Trash**: service, delete to trash, the trash place with restore and
    empty.
-6. **Comfort**: tabs, bookmarks, search, properties, drives.
-7. **Desktop integration**: `FileManager1`, Rizoma as the default for
+6. **Panes and tabs**: the browser and the selection made one for each pane;
+   then two panes, then tabs.
+7. **Comfort**: colours, bookmarks written, search, properties, drives.
+8. **Desktop integration**: `FileManager1`, Rizoma as the default for
    `inode/directory` (today it is Nautilus), Bioma's launcher reveal and
    downloads cell pointing to it.
-8. **Packaging**: AUR, `arch=any`, depends on `genoma`.
+9. **Packaging**: AUR, `arch=any`, depends on `genoma`.
 
 Verification: `genoma snapshot --mock` with a fake folder for the views;
 Rust tests for the services; live runs on scratch folders.
@@ -213,3 +242,17 @@ Rust tests for the services; live runs on scratch folders.
   there is something to show.
 - View: one global choice (grid or list, sort, hidden), as Nautilus does,
   not remembered per folder.
+
+## 9. Open
+
+- **Where a colour is kept.** As an extended attribute of the file
+  (`user.rizoma.colour`): it follows a rename and a move on the same disk, is
+  seen by nobody else, and is lost on disks without attributes (FAT, some
+  network ones) and by programs that copy without them. Or in a file of
+  Rizoma's: works anywhere, and loses track of what other programs move.
+  *Leaning: the attribute, with the file for where there are none.* Genoma
+  would read it with a folder's entries and keep it in its copies.
+- **How a colour is drawn.** Not the state colours, which say load. A few hues
+  of one lightness; on the picture's corner, the name, or the row's ground.
+  To be seen before it is chosen.
+- **Whether a tab is remembered** when the window closes.

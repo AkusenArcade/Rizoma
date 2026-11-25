@@ -78,6 +78,8 @@ function M.chosen(): string return g.colour.alpha(M.primary(), 0.16) end
 
 -- Bioma's measures at the normal density.
 M.cell_height = 40
+-- Buttons, and the path's capsules.
+M.action_height = 32
 M.row_height = 30
 M.radius_panel = 20
 M.radius_well = 10
@@ -92,6 +94,7 @@ M.font_name = 15
 M.weight_name = 500
 M.font_text = 14
 M.font_menu = 13
+M.font_action = 12
 M.font_secondary = 13
 M.font_meta = 11
 M.label_tracking = 0.06

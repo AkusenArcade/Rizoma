@@ -240,36 +240,69 @@ function M.slider(t: { [string]: any }): any
     }
 end
 
--- An answer: the primary's light for the one that does something, an
--- outline for the way back.
--- t: id, label, primary, on_click.
-function M.choice(t: { [string]: any }): any
+-- What does one thing: Bioma's buttons (components/choice, and page's dashed
+-- one), as tall as the path's capsules. "outline" is the plain one, "filled"
+-- the one that does what is asked, "dashed" the one that makes something new.
+-- What opens a menu or a cell is a cell itself (M.round).
+-- t: id, name, label, glyph, kind, lit() (on, for one that stays), disabled(),
+-- present(), bare() (its glyph alone), on_click.
+function M.action(t: { [string]: any }): any
     local over = g.signal(false)
-    local H = 26
-    return g.capsule {
+    local H = look.action_height
+    local dashed = t.kind == "dashed"
+    local function off(): boolean return t.disabled ~= nil and t.disabled() end
+    local function filled(): boolean return t.kind == "filled" or (t.lit ~= nil and t.lit()) end
+    local function worded(): boolean return t.label ~= nil and not (t.bare ~= nil and t.bare()) end
+    local function ink(): string
+        if filled() then return look.background() end
+        return if dashed and over.value and not off() then look.primary() else look.text()
+    end
+    local function edge(): string
+        if filled() then return look.CLEAR end
+        if over.value and not off() then return look.primary() end
+        return if dashed then g.colour.alpha(look.node(), 0.7) else look.node()
+    end
+    local node: { [any]: any } = {
         id = t.id,
         role = "button",
-        name = t.label,
+        name = t.name or t.label,
+        present = t.present,
         height = H,
-        padding_x = 14,
+        min_width = H,
+        padding_x = function() return if worded() then 14 else 0 end,
         radius = H / 2,
+        direction = "row",
         align = "center",
         justify = "center",
-        fill = function()
-            if t.primary then return look.primary_top() end
-            return if over.value then look.hovered() else CLEAR
-        end,
-        fill_bottom = function()
-            if t.primary then return look.primary_bottom() end
-            return if over.value then look.hovered() else CLEAR
-        end,
-        rim_top = function() return if t.primary then CLEAR else look.node() end,
-        rim_bottom = function() return if t.primary then CLEAR else look.node() end,
+        gap = 8,
+        fill = function() return if filled() then look.primary_top() else look.CLEAR end,
+        fill_bottom = function() return if filled() then look.primary_bottom() else look.CLEAR end,
+        rim_top = edge,
+        rim_bottom = edge,
+        opacity = function() return if off() then 0.45 else 1 end,
+        transition = { fill = "ui_change", fill_bottom = "ui_change", rim_top = "ui_change", rim_bottom = "ui_change", opacity = "ui_change" },
         on_hover = function(on: boolean) over.value = on end,
         on_press = function() end,
-        on_click = function() t.on_click() end,
-        M.label(t.label, function() return if t.primary then look.background() else look.text() end),
+        on_click = function(button: number)
+            if button == 272 and not g.untracked(off) then t.on_click() end
+        end,
     }
+    if dashed then
+        node.dash, node.dash_gap = 3, 3
+    end
+    if t.glyph then table.insert(node, M.glyph(t.glyph, 16, function() return false end, ink)) end
+    if t.label then
+        table.insert(node, g.text {
+            present = worded,
+            text = function() return string.upper(if type(t.label) == "function" then t.label() else t.label) end,
+            color = ink,
+            font = look.technical,
+            size = look.font_action,
+            weight = function() return if filled() then 700 else 500 end,
+            tracking = 0.04,
+        })
+    end
+    return g.capsule(node)
 end
 
 return M

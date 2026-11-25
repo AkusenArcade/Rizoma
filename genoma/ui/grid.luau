@@ -168,6 +168,7 @@ function M.new(width: () -> number, height: () -> number): any
             local i = browser.index.value
             return if i then math.ceil(i / columns.value) else nil
         end,
+        reveal_margin = scroll_mark.margin,
         row = function(item: () -> number, _)
             local c = g.untracked(function() return columns.value end)
             local node: { [any]: any } = { direction = "row", align = "start", gap = gap }

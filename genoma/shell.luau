@@ -18,6 +18,7 @@ local path_bar = require("ui/path_bar")
 local sidebar = require("ui/sidebar")
 local grid = require("ui/grid")
 local list = require("ui/list")
+local drag_picture = require("ui/drag_picture")
 local preview = require("ui/preview")
 local view_cell = require("ui/view_cell")
 
@@ -274,8 +275,8 @@ local content = g.box {
 
 local function places_button_shown(): boolean return not pinned() end
 local function bar_x(): number return left() + (if places_button_shown() then H + 8 else 0) end
-local NAV = 34
-local nav_w = NAV * 3 + 4 * 2
+local NAV = look.action_height
+local nav_w = NAV * 3 + 6 * 2
 local function path_x(): number return bar_x() + nav_w + GAP end
 
 local header = g.box {
@@ -299,17 +300,105 @@ local header = g.box {
     g.box {
         direction = "row",
         align = "center",
-        gap = 4,
-        ui.round { id = "back", name = "Back", glyph = "chevron-left", size = NAV, disabled = function() return not browser.can_back() end, on_click = browser.back },
-        ui.round { id = "forward", name = "Forward", glyph = "chevron-right", size = NAV, disabled = function() return not browser.can_forward() end, on_click = browser.forward },
-        ui.round { id = "up", name = "Up", glyph = "chevron-up", size = NAV, disabled = function() return not browser.can_up() end, on_click = browser.up },
+        gap = 6,
+        ui.action { id = "back", name = "Back", glyph = "chevron-left", disabled = function() return not browser.can_back() end, on_click = browser.back },
+        ui.action { id = "forward", name = "Forward", glyph = "chevron-right", disabled = function() return not browser.can_forward() end, on_click = browser.forward },
+        ui.action { id = "up", name = "Up", glyph = "chevron-up", disabled = function() return not browser.can_up() end, on_click = browser.up },
     },
     path_bar.new(function() return math.max(120, area.value.w - path_x() - E) end),
 }
 
 -- ---- Below it: what is stood on, what has to be said, the filter --------------------
 
-local function foot_room(): number return math.max(160, width() - H - GAP) end
+-- The foot: on the left what does something, then what there is to say; on
+-- the right the cell that says how folders are shown.
+local FIELD = 240
+-- A question needs the room its answers take.
+local function asking(): boolean return browser.notice.value ~= nil and browser.notice.value.act ~= nil end
+local function wordless(): boolean return width() < (if asking() then 900 else 620) end
+local function word(label: string): number
+    return g.text_width { text = string.upper(label), font = look.technical(), size = look.font_action, weight = 700, tracking = 0.04 }
+end
+local function button_w(label: string): number
+    return if wordless() then look.action_height else math.ceil(word(label)) + 14 * 2 + 16 + 8
+end
+local function field_w(): number return math.min(FIELD, math.max(120, width() - H - GAP * 2 - look.action_height)) end
+local function foot_room(): number
+    local used = (if filtering.value then field_w() else button_w("Filter")) + 8 + button_w("Preview") + GAP
+    return math.max(120, width() - H - GAP - used)
+end
+
+-- FILTER, which becomes the field it opens.
+local function filter_button(): any
+    local over = g.signal(false)
+    local HH = look.action_height
+    local function on(): boolean return filtering.value end
+    return g.capsule {
+        id = "filter",
+        role = "button",
+        name = "Filter",
+        width = function() return if on() then field_w() else button_w("Filter") end,
+        height = HH,
+        radius = HH / 2,
+        clip = true,
+        fill = function() return if on() then look.glass() else look.CLEAR end,
+        rim_top = function() return if on() or over.value then look.primary() else look.node() end,
+        rim_bottom = function() return if on() or over.value then look.primary() else look.node() end,
+        transition = { width = function() return if on() then "cell_open" else "cell_close" end, fill = "ui_change", rim_top = "ui_change", rim_bottom = "ui_change" },
+        on_hover = function(o: boolean) over.value = o end,
+        on_press = function() end,
+        on_click = function(button: number)
+            if button == 272 and not g.untracked(function() return filtering.value end) then filtering.value = true end
+        end,
+        g.box {
+            overlay = true,
+            attach = "corner",
+            offset_x = function() return if wordless() and not on() then (HH - 16) / 2 else 14 end,
+            height = HH,
+            direction = "row",
+            align = "center",
+            gap = 8,
+            ui.glyph("search", 16, on, look.text),
+            g.text {
+                present = function() return not on() and not wordless() end,
+                text = "FILTER",
+                color = look.text,
+                font = look.technical,
+                size = look.font_action,
+                weight = 500,
+                tracking = 0.04,
+            },
+            g.field {
+                id = "filter-field",
+                present = on,
+                width = function() return field_w() - 14 * 2 - 16 - 8 - 24 end,
+                size = look.font_label,
+                font = look.expressive,
+                color = look.text,
+                caret_color = look.primary,
+                selection_color = look.chosen,
+                placeholder = "In this folder",
+                focused = function() return filtering.value and not path_bar.editing.value end,
+                text = function() return browser.filter.value end,
+                on_change = function(text: string) browser.filter.value = text end,
+                on_submit = open_chosen,
+            },
+            g.box {
+                id = "filter-stop",
+                role = "button",
+                name = "Stop filtering",
+                present = on,
+                width = 24,
+                height = HH,
+                align = "center",
+                justify = "center",
+                on_press = function() end,
+                on_click = stop_filtering,
+                ui.glyph("close", 14, function() return false end, look.text_muted),
+            },
+        },
+    }
+end
 
 local function said(): (string, string)
     local n = selection.count()
@@ -354,40 +443,25 @@ local foot = g.box {
     align = "center",
     gap = GAP,
     transition = { offset_x = "cell_open" },
-    g.capsule {
-        present = function() return filtering.value end,
-        width = function() return math.min(260, foot_room()) end,
-        height = H,
-        radius = H / 2,
-        padding_x = 16,
+    g.box {
         direction = "row",
         align = "center",
-        gap = 10,
-        fill = look.glass_over,
-        rim_top = look.primary,
-        rim_bottom = look.primary,
-        backdrop_blur = look.glass_blur,
-        ui.glyph("search", 18),
-        g.field {
-            id = "filter-field",
-            grow = 1,
-            size = look.font_label,
-            font = look.expressive,
-            color = look.text,
-            caret_color = look.primary,
-            selection_color = look.chosen,
-            placeholder = "In this folder",
-            focused = function() return filtering.value and not path_bar.editing.value end,
-            text = function() return browser.filter.value end,
-            on_change = function(text: string) browser.filter.value = text end,
-            on_submit = open_chosen,
+        gap = 8,
+        filter_button(),
+        ui.action {
+            id = "preview-button",
+            label = "Preview",
+            glyph = "preview",
+            bare = wordless,
+            lit = function() return preview_pinned() or peeking.value end,
+            on_click = toggle_preview,
         },
     },
     pill(
         function() return browser.notice.value ~= nil end,
         g.text {
             text = function() return if browser.notice.value then browser.notice.value.text else "" end,
-            max_width = function() return math.max(120, foot_room() - 200) end,
+            max_width = function() return math.max(60, foot_room() - (if asking() then 218 else 40)) end,
             ellipsize = "middle",
             color = look.text,
             font = look.expressive,
@@ -398,11 +472,11 @@ local foot = g.box {
             direction = "row",
             align = "center",
             gap = 8,
-            ui.choice { id = "notice-no", label = "Cancel", on_click = function() browser.say(nil) end },
-            ui.choice {
+            ui.action { id = "notice-no", label = "Cancel", on_click = function() browser.say(nil) end },
+            ui.action {
                 id = "notice-yes",
                 label = "Run",
-                primary = true,
+                kind = "filled",
                 on_click = function()
                     local n = g.untracked(function() return browser.notice.value end)
                     if n and n.act then n.act() end
@@ -413,7 +487,7 @@ local foot = g.box {
     pill(
         function()
             local name = said()
-            return name ~= "" and browser.notice.value == nil and not filtering.value
+            return name ~= "" and browser.notice.value == nil and foot_room() > 180
         end,
         g.text {
             text = function() return (said()) end,
@@ -507,7 +581,7 @@ g.ipc("rizoma", {
     end,
 })
 
-return g.window {
+local window = g.window {
     title = function() return paths.name(browser.here.value) end,
     app_id = "dev.akusen.rizoma",
     width = 1100,
@@ -540,3 +614,6 @@ return g.window {
         view_cell.new(function() return area.value end),
     },
 }
+
+-- A Genoma without it drags blind.
+return if g.drag_picture then { window, drag_picture.new() } else window

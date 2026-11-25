@@ -74,6 +74,7 @@ end
 
 -- Where the last press was, for what it would drag.
 local pressed = g.signal("")
+M.pressed = pressed
 -- A finger held on an entry starts choosing several: a tap is then one more
 -- or one less, until none is left.
 local tapping = g.signal(false)
