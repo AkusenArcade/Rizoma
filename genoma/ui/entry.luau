@@ -36,7 +36,7 @@ function M.name(entry: () -> any, text: any): any
     return g.capsule {
         padding_x = function() return M.marked(entry()) / 2 end,
         padding_y = 1,
-        radius = 11,
+        radius = look.round(11),
         fill = function()
             local m = M.mark(entry())
             return if m then g.colour.alpha(m, 0.2) else look.CLEAR
@@ -86,7 +86,7 @@ function M.picture(entry: () -> any, size: number, pictured: boolean): any
             present = function() return thumb.value ~= nil end,
             width = size,
             height = size,
-            radius = math.min(8, size / 6),
+            radius = look.round(math.min(8, size / 6)),
             fit = "contain",
             src = function() return thumb.value or "" end,
         },
@@ -101,7 +101,7 @@ function M.picture(entry: () -> any, size: number, pictured: boolean): any
             bottom = 0,
             width = math.max(12, size / 4),
             height = math.max(12, size / 4),
-            radius = math.max(12, size / 4) / 2,
+            radius = look.round(math.max(12, size / 4) / 2),
             align = "center",
             justify = "center",
             fill = look.cell,

@@ -36,7 +36,7 @@ function M.new(t: { [string]: any }): any
         name = t.label,
         width = function() return if on() then t.room() else M.width(t.label, bare()) end,
         height = H,
-        radius = H / 2,
+        radius = look.round(H / 2),
         clip = true,
         fill = function() return if on() then look.glass() else look.CLEAR end,
         rim_top = edge,

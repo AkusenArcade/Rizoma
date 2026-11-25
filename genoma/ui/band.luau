@@ -132,7 +132,7 @@ function M.new(pane: any, t: { [string]: any }, inner: any): any
                 local top = b.y - t.scroll()
                 return math.max(1, math.min(top + b.h, t.height()) - math.max(0, top))
             end,
-            radius = 8,
+            radius = look.round(8),
             fill = function() return g.colour.alpha(look.primary(), 0.12) end,
             rim_top = look.primary,
             rim_bottom = look.primary,

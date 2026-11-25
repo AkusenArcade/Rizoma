@@ -38,7 +38,7 @@ function M.new(t: { [string]: any }): any
                 attach = "center",
                 width = DOT,
                 height = DOT,
-                radius = DOT / 2,
+                radius = look.round(DOT / 2),
                 fill = look.CLEAR,
                 rim_top = function() return if chosen() then look.text() elseif lit() then look.node() else look.CLEAR end,
                 rim_bottom = function() return if chosen() then look.text() elseif lit() then look.node() else look.CLEAR end,
@@ -47,7 +47,7 @@ function M.new(t: { [string]: any }): any
             if key then g.capsule {
                 width = 12,
                 height = 12,
-                radius = 6,
+                radius = look.round(6),
                 fill = function() return look.gradient_top(colours.hex(key, look.is_dark())) end,
                 fill_bottom = function() return look.gradient_bottom(colours.hex(key, look.is_dark())) end,
                 rim_top = look.CLEAR,

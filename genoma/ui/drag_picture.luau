@@ -61,7 +61,7 @@ function M.new(): any
             g.capsule {
                 height = 28,
                 padding_x = 12,
-                radius = 14,
+                radius = look.round(14),
                 direction = "row",
                 align = "center",
                 fill = look.glass_over,

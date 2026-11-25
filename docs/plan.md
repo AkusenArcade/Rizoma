@@ -1,6 +1,6 @@
 # Rizoma — plan
 
-Status: phases 1 to 6 and the colours built, 2026-11-25 (`genoma/`). Pace: slow, no deadline.
+Status: phases 1 to 7 built, 2026-11-25 (`genoma/`). Pace: slow, no deadline.
 
 ## 1. What it is
 
@@ -138,8 +138,8 @@ As built (2026-11-25). No title bar, as every Genoma app:
   going to bud out of its foot: Tab completes, the arrows choose. A path that
   is a file's is its folder, standing on it. A deep path keeps its start and as
   many of its last steps as fit.
-- **Places**: the user's folders, the GTK bookmarks (read, not written yet),
-  the computer; in Orbitron, as a menu is. Pinned beside the folder at 800
+- **Places**: the user's folders, the GTK bookmarks, the computer, the trash, the
+  disks plugged in; in Orbitron, as a menu is. Pinned beside the folder at 800
   wide and more; under that, or
   put away (F9), a button they grow from and float over the folder.
 - **View**: a button at the foot's right, and the cell that grows from it:
@@ -207,6 +207,19 @@ As built (2026-11-25). No title bar, as every Genoma app:
   `$XDG_DATA_HOME/rizoma/colours.json`, which serves what can have no attribute
   (links, FAT, what is not ours to write) and what a program saves by putting
   another file in its place; what Rizoma moves or renames is followed there too.
+- **Bookmarks** are written too (menu, Ctrl+D): added, renamed in place, removed,
+  dragged among themselves. The file is every program's: only the line changed
+  changes.
+- **Disks**: their stick filled as far as they are used; one not mounted stands
+  back, and is mounted when it is opened. Ejected from its row; while it is
+  written to it says so, until then it is not to be pulled.
+- **Properties** (menu, Alt+Enter): a cell that grows from what they are of:
+  where, how much (counted as it is shown), times, who may what, the room on its
+  disk, and what opens every file of that kind, chosen there. The rest is read
+  only.
+- **How round**: Bioma's RADIUS, from the desktop's theme file, shapes every
+  surface (`look.round`); with no desktop to follow, all of it. What stands in the
+  window's corner is concentric with it (20, 12, 6; Akusen, 2026-11-25).
 - **What is over what** (Akusen, 2026-11-25): the bar, one, of the ways and the
   path; under it the tabs, when there is more than one; under them one pane or
   two. The bar is about the pane that has the keys, and so are the foot and the
@@ -239,7 +252,7 @@ Alt+←/→, Alt+Home, Ctrl+H, Ctrl+L, Ctrl+F or just typing (filter), Ctrl+1/2
 (grid, list), F5 or Ctrl+R, F9 (places),
 space (preview), Ctrl+C/X/V, Ctrl+Z, F2, F4 (terminal), Ctrl+Shift+N, Delete
 (trash), Shift+Delete (for good, asked), Alt+0…6 (colours), Ctrl+T/W/Tab (tabs),
-F3, Tab, F6 (panes), Menu, Escape.
+F3, Tab, F6 (panes), Ctrl+D (bookmark), Alt+Enter (properties), Menu, Escape.
 
 What runs a program (executables, `.desktop`, AppImage, Windows programs,
 Java archives) is asked before, whatever opens it; a shell script opens as the
@@ -282,7 +295,8 @@ text it is.
    empty. Done, 2026-11-25.
 6. **Panes and tabs**: the browser and the selection made one for each pane;
    then two panes, then tabs. Done, 2026-11-25.
-7. **Comfort**: colours (done, 2026-11-25), bookmarks written, search, properties, drives.
+7. **Comfort**: colours, bookmarks written, search (the filter's), properties,
+   drives. Done, 2026-11-25.
 8. **Desktop integration**: `FileManager1`, Rizoma as the default for
    `inode/directory` (today it is Nautilus), Bioma's launcher reveal and
    downloads cell pointing to it.

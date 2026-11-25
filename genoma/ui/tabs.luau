@@ -125,7 +125,7 @@ function M.new(width: () -> number): any
             name = "Tab",
             width = function() return if out() then wide() else H * 0.4 end,
             height = H,
-            radius = H / 2,
+            radius = look.round(H / 2),
             clip = true,
             opacity = function() return if out() then 1 else 0 end,
             fill = function() return if seen() then look.cell() else look.glass() end,

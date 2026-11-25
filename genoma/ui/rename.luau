@@ -60,7 +60,7 @@ function M.new(t: { [string]: any }): any
         end,
         width = width,
         height = H,
-        radius = H / 2,
+        radius = look.round(H / 2),
         padding_x = PAD,
         direction = "row",
         align = "center",

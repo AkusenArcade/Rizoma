@@ -1,6 +1,6 @@
 --!strict
 -- Where one starts from: the user's own folders, the bookmarks every GTK
--- program shares (read here, never written), the computer.
+-- program shares, the computer.
 local g = require("@genoma")
 local paths = require("core/paths")
 
@@ -77,6 +77,72 @@ M.list = g.computed(function(): { Place }
     table.insert(out, { name = "Trash", path = paths.TRASH, glyph = "trash", group = "computer" })
     return out
 end)
+
+-- ---- The bookmarks ------------------------------------------------------------------------
+
+-- The file is every program's: a line changed is that line, and what is not
+-- understood stays as it is.
+local function lines(): { string }
+    local out: { string } = {}
+    for line in string.gmatch(g.untracked(function() return bookmark_file.text end) or "", "[^\r\n]+") do table.insert(out, line) end
+    return out
+end
+local function path_of(line: string): string?
+    local uri = string.match(line, "^(%S+)")
+    local path = if uri then g.uri_path(uri) else nil
+    return if path then paths.expand(path) else nil
+end
+local function write(list: { string })
+    bookmark_file:write(if #list > 0 then table.concat(list, "\n") .. "\n" else "")
+end
+local function find(list: { string }, path: string): number?
+    for i, line in list do
+        if path_of(line) == path then return i end
+    end
+    return nil
+end
+
+-- Whether a folder is among the places already.
+function M.has(path: string): boolean
+    for _, p in M.list.value do
+        if p.path == path then return true end
+    end
+    return false
+end
+function M.add(path: string)
+    if path == paths.TRASH or g.untracked(function() return M.has(path) end) then return end
+    local list = lines()
+    table.insert(list, g.file_uri(path))
+    write(list)
+end
+function M.remove(path: string)
+    local list = lines()
+    local at = find(list, path)
+    if at == nil then return end
+    table.remove(list, at)
+    write(list)
+end
+-- Called so; with its own name, as its folder is.
+function M.rename(path: string, name: string)
+    local list = lines()
+    local at = find(list, path)
+    if at == nil then return end
+    local uri = string.match(list[at], "^(%S+)") :: string
+    name = string.match((string.gsub(name, "[\r\n]", " ")), "^%s*(.-)%s*$") or ""
+    list[at] = if name == "" or name == paths.name(path) then uri else uri .. " " .. name
+    write(list)
+end
+-- Before or after another of them.
+function M.move(path: string, beside: string, after: boolean)
+    local list = lines()
+    local at = find(list, path)
+    if at == nil then return end
+    local line = table.remove(list, at) :: string
+    local to = find(list, beside)
+    if to == nil then return end
+    table.insert(list, if after then to + 1 else to, line)
+    write(list)
+end
 
 -- The place a path is in: the nearest one around it.
 function M.of(path: string): Place?

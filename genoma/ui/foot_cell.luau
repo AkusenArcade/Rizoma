@@ -51,7 +51,7 @@ function M.new(t: { [string]: any }): any
         offset_y = function() return if grown.value then by() - GAP_UP - tall() else by() end,
         width = function() return if grown.value then width() else BUTTON end,
         height = function() return if grown.value then tall() else BUTTON end,
-        radius = function() return if grown.value then look.radius_panel else BUTTON / 2 end,
+        radius = function() return look.shaped(if grown.value then look.radius_panel else BUTTON / 2) end,
         opacity = function() return if grown.value then 1 else 0 end,
         clip = true,
         fill = look.glass_over,

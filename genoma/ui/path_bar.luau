@@ -121,7 +121,7 @@ local function step(index: number, shoot: () -> any, list: () -> { Shoot }, last
     local node: { [any]: any } = {
         width = width,
         height = H,
-        radius = H / 2,
+        radius = look.round(H / 2),
         fill = look.glass,
         rim_top = function()
             if exchange.welcome("step", shoot().path) then return look.primary() end
@@ -223,7 +223,7 @@ local function offered(item: () -> any, place: () -> number): any
         direction = "row",
         align = "center",
         justify = "start",
-        radius = look.radius_well,
+        radius = look.round(look.radius_well),
         fill = function()
             if lit() then return look.chosen() end
             return if over.value then look.hovered() else look.CLEAR
@@ -366,7 +366,7 @@ function M.new(room: () -> number): any
             present = function() return M.editing.value end,
             width = room,
             height = look.cell_height,
-            radius = look.cell_height / 2,
+            radius = look.round(look.cell_height / 2),
             padding_x = FIELD_PAD,
             direction = "row",
             align = "center",
@@ -412,7 +412,7 @@ function M.new(room: () -> number): any
                 offset_y = function() return if open() then 8 else 0 end,
                 width = room,
                 height = tall,
-                radius = look.radius_panel,
+                radius = look.round(look.radius_panel),
                 growth = function() return if open() then 1 else 0 end,
                 bud = function() return if open() then 0 else look.cell_height end,
                 fill = look.cell,

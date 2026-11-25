@@ -127,7 +127,7 @@ local function row(pane: any, width: () -> number): (() -> number, any) -> any
             align = "center",
             justify = "start",
             gap = GAP,
-            radius = look.radius_well,
+            radius = look.round(look.radius_well),
             fill = function()
                 if chosen() or entry_ui.welcoming(pane, e.value) then return look.chosen() end
                 return if over.value == item() then look.hovered() else look.CLEAR

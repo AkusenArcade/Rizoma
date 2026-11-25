@@ -76,6 +76,31 @@ function M.glass_over(): string return g.colour.alpha(M.cell(), 0.94) end
 function M.hovered(): string return g.colour.alpha(M.text(), 0.06) end
 function M.chosen(): string return g.colour.alpha(M.primary(), 0.16) end
 
+-- How round the desktop is: Bioma's RADIUS, 0 to 1, of every surface's own
+-- radius (Akusen, 2026-11-25). The file says what a control 32 tall takes; with
+-- no desktop to follow, all of it.
+local CONTROL = 16
+function M.roundness(): number
+    local d = theme.desktop()
+    local r = d and d.sizes and d.sizes.radius
+    return if type(r) == "number" then math.clamp(r / CONTROL, 0, 1) else 1
+end
+function M.shaped(radius: number): number return radius * M.roundness() end
+-- For a node's `radius`; and for what lies inside a panel, concentric with it.
+function M.round(radius: number): () -> number
+    return function(): number return M.shaped(radius) end
+end
+function M.within(inset: number): () -> number
+    return function(): number return math.max(0, M.shaped(M.radius_panel) - inset) end
+end
+-- The window's own corners, as Bioma gives them to its compositors; and what
+-- stands in one of them, `inset` from its edges, concentric with it (Akusen,
+-- 2026-11-25).
+local WINDOW = 20
+function M.in_corner(inset: number): () -> number
+    return function(): number return math.max(0, M.shaped(WINDOW) - inset) end
+end
+
 -- Bioma's measures at the normal density.
 M.cell_height = 40
 -- Buttons, and the path's capsules.
@@ -83,7 +108,9 @@ M.action_height = 32
 M.row_height = 30
 M.radius_panel = 20
 M.radius_well = 10
-M.margin_edge = 12
+-- What stands in the window's corner stays round inside it: 20, 12, and 6
+-- for what is in it.
+M.margin_edge = 8
 M.gap = 12
 M.thread = 1.3
 M.font_label = 15

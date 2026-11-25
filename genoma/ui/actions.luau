@@ -5,7 +5,9 @@ local mime = require("@genoma/mime")
 local browser = require("core/browser")
 local bin = require("core/bin")
 local colours = require("core/colours")
+local drives = require("core/drives")
 local exchange = require("core/exchange")
+local places = require("core/places")
 local operations = require("core/operations")
 local panes = require("core/panes")
 local paths = require("core/paths")
@@ -14,6 +16,8 @@ local menu = require("ui/menu")
 
 local M = {}
 
+-- Set by the shell: what shows the properties of some.
+M.properties = function(_: { string }) end
 -- Set by the shell: what opens the field of the new folder's name.
 M.new_folder = function() end
 
@@ -106,6 +110,9 @@ function M.on_entry(e: any, by_key: boolean?)
         add { text = "Paste into it", off = not holds(), act = function() operations.paste(e.path) end }
     end
     add { text = if #list == 1 then "Copy its path" else "Copy their paths", act = function() exchange.copy_path(list) end }
+    if #list == 1 and e.dir and not e.broken and not g.untracked(function() return places.has(e.path) end) then
+        add { text = "Add to the places", keys = "Ctrl D", act = function() places.add(e.path) end }
+    end
     if #list == 1 then
         add "-"
         add { text = "Rename", keys = "F2", act = function() operations.rename(e) end }
@@ -114,6 +121,8 @@ function M.on_entry(e: any, by_key: boolean?)
     add { text = "Colour", colours = { chosen = common(list), pick = function(key: string?) operations.colour(list, key) end } }
     add "-"
     add { text = "Move to the trash", keys = "Del", act = function() operations.throw(list) end }
+    add "-"
+    add { text = "Properties", keys = "Alt ↵", act = function() M.properties(list) end }
     show(items, by_key)
 end
 
@@ -137,11 +146,13 @@ function M.on_ground(by_key: boolean?)
         "-",
         { text = "Open in the terminal", keys = "F4", act = function() browser.terminal(at) end },
         { text = "Copy its path", act = function() exchange.copy_path { at } end },
+        "-",
+        { text = "Properties", keys = "Alt ↵", act = function() M.properties { at } end },
     }, by_key)
 end
 
--- On a place, or a step of the path.
-function M.on_place(path: string, go: () -> ())
+-- On a place, or a step of the path; `bookmark`, what renames it.
+function M.on_place(path: string, go: () -> (), bookmark: (() -> ())?)
     if path == paths.TRASH then
         show {
             { text = "Open", act = go },
@@ -150,13 +161,36 @@ function M.on_place(path: string, go: () -> ())
         }
         return
     end
-    show {
+    local items: { menu.Item | string } = {
         { text = "Open", act = go },
         { text = "Open in a new tab", act = function() panes.new_tab(path) end },
         { text = "Open in the terminal", act = function() browser.terminal(path) end },
         "-",
         { text = "Paste into it", off = not holds(), act = function() operations.paste(path) end },
         { text = "Copy its path", act = function() exchange.copy_path { path } end },
+    }
+    if bookmark then
+        for _, it in {
+            "-",
+            { text = "Rename", act = bookmark },
+            { text = "Remove from the places", act = function() places.remove(path) end },
+        } :: { any } do table.insert(items, it) end
+    elseif not g.untracked(function() return places.has(path) end) then
+        table.insert(items, { text = "Add to the places", act = function() places.add(path) end })
+    end
+    table.insert(items, "-")
+    table.insert(items, { text = "Properties", act = function() M.properties { path } end })
+    show(items)
+end
+
+-- On a disk plugged in.
+function M.on_drive(v: any)
+    show {
+        { text = if v.mount then "Open" else "Mount and open", off = v.busy ~= "", act = function() drives.open(v.device) end },
+        { text = "Open in a new tab", off = v.busy ~= "", act = function() drives.open(v.device, true) end },
+        "-",
+        { text = "Unmount", off = v.mount == nil or v.busy ~= "", act = function() drives.unmount(v.device) end },
+        { text = "Eject", off = v.busy ~= "", act = function() drives.eject(v.id) end },
     }
 end
 

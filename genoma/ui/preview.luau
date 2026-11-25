@@ -106,7 +106,7 @@ local function picture(src: () -> string?, e: any, width: number, height: number
             present = function() return src() ~= nil end,
             width = width,
             height = height,
-            radius = look.radius_well,
+            radius = look.round(look.radius_well),
             fit = "contain",
             src = function() return src() or "" end,
         },
@@ -140,7 +140,7 @@ local function text_head(e: any, width: number, height: number): any
     return g.capsule {
         width = width,
         height = height,
-        radius = look.radius_well,
+        radius = look.round(look.radius_well),
         clip = true,
         fade_bottom = 24,
         fill = function() return g.colour.alpha(look.background(), 0.8) end,
@@ -191,7 +191,7 @@ local function many_head(e: any, width: number, height: number): any
     end
     return g.capsule {
         width = width,
-        radius = look.radius_well,
+        radius = look.round(look.radius_well),
         fill = function() return g.colour.alpha(look.background(), 0.8) end,
         rim_top = look.CLEAR,
         rim_bottom = look.CLEAR,
@@ -246,7 +246,7 @@ local function folder_head(e: any, width: number, height: number): any
     end
     return g.capsule {
         width = width,
-        radius = look.radius_well,
+        radius = look.round(look.radius_well),
         fill = function() return g.colour.alpha(look.background(), 0.8) end,
         rim_top = look.CLEAR,
         rim_bottom = look.CLEAR,
@@ -414,7 +414,7 @@ function M.new(t: { [string]: any }): any
         offset_y = function() return if grown.value then t.y() else at("y") end,
         width = function() return if grown.value then t.width() else at("w") end,
         height = function() return if grown.value then t.height() else at("h") end,
-        radius = look.radius_panel,
+        radius = look.round(look.radius_panel),
         clip = true,
         opacity = function() return if grown.value then 1 else 0 end,
         fill = function() return if t.pinned() then look.glass() else look.glass_over() end,

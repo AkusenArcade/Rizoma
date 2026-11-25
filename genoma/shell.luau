@@ -31,7 +31,9 @@ local menu = require("ui/menu")
 local rename = require("ui/rename")
 local swatches = require("ui/swatches")
 local tabs = require("ui/tabs")
+local places = require("core/places")
 local preview = require("ui/preview")
+local properties = require("ui/properties")
 local view_cell = require("ui/view_cell")
 
 local E, GAP, H = look.margin_edge, look.gap, look.cell_height
@@ -242,12 +244,23 @@ local function escape()
     end
 end
 
+-- Set below, where what is stood on is known.
+local properties_asked = function() end
+
 -- Every key the window is given; while a field has them, those it leaves
 -- (Escape, the arrows up and down, the commands).
 local function key(name: string, text: string?, mods: any)
     if mods.logo then return end
     if g.untracked(menu.is_open) then
         menu.key(name)
+        return
+    end
+    if g.untracked(properties.is_open) then
+        if name == "Escape" or name == "Return" or name == "space" then properties.close() end
+        return
+    end
+    if g.untracked(function() return sidebar.naming.value end) ~= nil then
+        if name == "Escape" then sidebar.naming.value = nil end
         return
     end
     if g.untracked(function() return operations.renaming.value end) ~= nil then
@@ -285,6 +298,9 @@ local function key(name: string, text: string?, mods: any)
         elseif letter == "i" and mods.shift then selection.invert()
         elseif letter == "c" then exchange.copy()
         elseif letter == "x" then exchange.cut()
+        elseif letter == "d" then
+            local e = if g.untracked(selection.count) == 1 then g.untracked(browser.selected) else nil
+            places.add(if e and e.dir and not e.deleted then e.path else g.untracked(function() return browser.here.value end))
         elseif letter == "v" then operations.paste()
         elseif letter == "z" then operations.undo_last()
         elseif letter == "n" and mods.shift then new_folder()
@@ -301,6 +317,7 @@ local function key(name: string, text: string?, mods: any)
         elseif name == "Up" then browser.up()
         elseif name == "Down" then open_chosen()
         elseif name == "Home" then browser.go("~")
+        elseif name == "Return" or name == "KP_Enter" then properties_asked()
         elseif string.match(name, "^[0-9]$") then
             -- Alt and a figure: that colour; 0, none.
             local c = colours.list[tonumber(name) :: number]
@@ -447,7 +464,7 @@ local function pane_node(item: () -> any, _: any): any
             present = function() return exchange.welcome(`pane:{pane.id}`, pane.here.value) and not own_ground(pane) end,
             width = pane_w,
             height = height,
-            radius = 14,
+            radius = look.round(14),
             fill = function() return g.colour.alpha(look.primary(), 0.06) end,
             rim_top = look.primary,
             rim_bottom = look.primary,
@@ -577,7 +594,7 @@ local filter_button = foot_field.new {
     room = field_w,
     placeholder = "Here and below",
     stop = "Stop filtering",
-    focused = function() return browser.typing.value and not path_bar.editing.value and operations.renaming.value == nil and not menu.is_open() end,
+    focused = function() return browser.typing.value and not path_bar.editing.value and operations.renaming.value == nil and sidebar.naming.value == nil and not properties.is_open() and not menu.is_open() end,
     on_take = function() browser.typing.value = true end,
     text = function() return browser.filter.value end,
     on_change = function(text: string) browser.filter.value = text end,
@@ -591,7 +608,7 @@ local colour_filter = g.capsule {
     width = function() return if colours_shown() then COLOURS else 0 end,
     present = colours_shown,
     height = look.action_height,
-    radius = look.action_height / 2,
+    radius = look.round(look.action_height / 2),
     direction = "row",
     align = "center",
     justify = "center",
@@ -621,7 +638,7 @@ local naming_button = foot_field.new {
     placeholder = "Its name",
     stop = "No new folder",
     select = "all",
-    focused = function() return not path_bar.editing.value and operations.renaming.value == nil and not menu.is_open() end,
+    focused = function() return not path_bar.editing.value and operations.renaming.value == nil and sidebar.naming.value == nil and not properties.is_open() and not menu.is_open() end,
     wrong = function() return files:check_name(new_name.value) ~= nil end,
     text = function() return new_name.value end,
     on_change = function(text: string) new_name.value = text end,
@@ -651,7 +668,7 @@ local function pill(present: () -> boolean, ...: any): any
     return g.capsule {
         present = present,
         height = H,
-        radius = H / 2,
+        radius = look.round(H / 2),
         padding_x = 18,
         direction = "row",
         align = "center",
@@ -837,6 +854,36 @@ actions.at = function(items: any)
     end
 end
 
+-- What there is to know of some paths: from the one stood on, when it is among
+-- them.
+actions.properties = function(list: { string })
+    local e = if #list == 1 then g.untracked(function(): any
+        local i = browser.dir:index(list[1])
+        if i then return browser.dir:at(i) end
+        -- A folder that is not listed: the one shown, a place.
+        local path = list[1]
+        return {
+            name = paths.called(path),
+            path = path,
+            dir = true,
+            link = false,
+            broken = false,
+            hidden = false,
+            size = 0,
+            modified = 0,
+            mime = "inode/directory",
+        }
+    end) else nil
+    local at = g.untracked(stood_at)
+    local a = g.untracked(function() return area.value end)
+    properties.open(list, e, if at and selection.has(list[1]) then at else { x = a.w / 2 - 40, y = a.h / 2 - 40, w = 80, h = 80 })
+end
+properties_asked = function()
+    if g.untracked(browser.in_trash) then return end
+    local list = selection.list()
+    actions.properties(if #list > 0 then list else { g.untracked(function() return browser.here.value end) })
+end
+
 local preview_pane = preview.new {
     pinned = preview_pinned,
     open = function() return peeking.value end,
@@ -966,6 +1013,7 @@ local window = g.window {
         },
         jobs_cell.new(function() return area.value end),
         view_cell.new(function() return area.value end),
+        properties.new(function() return area.value end),
         menu.new(function() return area.value end),
     },
 }

@@ -96,7 +96,7 @@ local function cell(pane: any, entry: () -> any, icon: number, width: number, he
         present = function() return e.value ~= nil end,
         width = width,
         height = height,
-        radius = 14,
+        radius = look.round(14),
         padding = PAD,
         direction = "column",
         align = "center",
