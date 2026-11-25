@@ -4,6 +4,7 @@
 local g = require("@genoma")
 local browser = require("core/browser")
 local config = require("core/config")
+local operations = require("core/operations")
 local look = require("ui/look")
 local selection = require("core/selection")
 local band = require("ui/band")
@@ -18,14 +19,15 @@ local GAP, PAD, LINES = 8, 8, 2
 -- how it begins and its extension. Measured once for each name and width.
 local fitted: { [string]: string } = {}
 local held = 0
-local function fit(name: string, width: number, font: string): string
-    local key = `{width}:{font}:{name}`
+local function fit(name: string, width: number, font: string, lines: number?): string
+    local most = lines or LINES
+    local key = `{width}:{most}:{font}:{name}`
     local hit = fitted[key]
     if hit then return hit end
     local function fits(text: string): boolean
         local h = g.text_height { text = text, font = font, size = look.font_name, weight = look.weight_name, width = width }
         local one = g.text_height { text = "X", font = font, size = look.font_name, weight = look.weight_name, width = width }
-        return h <= one * LINES + 1
+        return h <= one * most + 1
     end
     local out = name
     if not fits(name) then
@@ -62,6 +64,16 @@ function M.rect(index: number): { x: number, y: number, w: number, h: number }
     return { x = col * (p.cell_w + p.gap), y = row * p.pitch - scrolled.value, w = p.cell_w, h = p.cell_h }
 end
 
+-- Where an entry's name is, and how wide: under its picture, in its middle.
+function M.name_rect(index: number): any
+    local e = browser.dir:at(index)
+    if e == nil then return nil end
+    local r = M.rect(index)
+    local w = g.text_width { text = e.name, font = look.expressive(), size = look.font_name, weight = look.weight_name }
+    w = math.min(math.ceil(w), r.w - PAD * 2)
+    return { x = r.x + (r.w - w) / 2, y = r.y + PAD + config.get("icon") + 6, w = w, h = 22, centred = true }
+end
+
 local function cell(entry: () -> any, icon: number, width: number, height: number): any
     local over = g.signal(false)
     local e = g.computed(entry)
@@ -73,6 +85,18 @@ local function cell(entry: () -> any, icon: number, width: number, height: numbe
     local function stood(): boolean
         local it = e.value
         return it ~= nil and browser.cursor.value == it.path
+    end
+    local function edge(): string
+        if chosen() or entry_ui.welcoming(e.value) then return look.primary() end
+        return if stood() then look.node() else look.CLEAR
+    end
+    -- Found below, the last line is the way to it.
+    local function within(): string?
+        local it = e.value
+        return if it then it.within else nil
+    end
+    local function named(it: any): string
+        return fit(it.name, width - PAD * 2, look.expressive(), if it.within then 1 else LINES)
     end
     -- The picture and the name take the presses; the rest of the cell is the
     -- folder's own ground, where a rubber band starts.
@@ -87,11 +111,11 @@ local function cell(entry: () -> any, icon: number, width: number, height: numbe
         justify = "start",
         gap = 6,
         fill = function()
-            if chosen() then return look.chosen() end
+            if chosen() or entry_ui.welcoming(e.value) then return look.chosen() end
             return if over.value then look.hovered() else look.CLEAR
         end,
-        rim_top = function() return if chosen() then look.primary() elseif stood() then look.node() else look.CLEAR end,
-        rim_bottom = function() return if chosen() then look.primary() elseif stood() then look.node() else look.CLEAR end,
+        rim_top = function() return edge() end,
+        rim_bottom = function() return edge() end,
         transition = { fill = "ui_change" },
         g.box(entry_ui.handlers({
             role = "button",
@@ -104,7 +128,12 @@ local function cell(entry: () -> any, icon: number, width: number, height: numbe
             g.text {
                 text = function()
                     local it = e.value
-                    return if it then fit(it.name, width - PAD * 2, look.expressive()) else ""
+                    return if it then named(it) else ""
+                end,
+                opacity = function()
+                    local it = e.value
+                    local r = operations.renaming.value
+                    return if it and r and r.path == it.path then 0 else 1
                 end,
                 -- No wider than it is: what is beside a short name is ground.
                 max_width = function()
@@ -120,6 +149,16 @@ local function cell(entry: () -> any, icon: number, width: number, height: numbe
                 font = look.expressive,
                 size = look.font_name,
                 weight = look.weight_name,
+            },
+            g.text {
+                present = function() return within() ~= nil end,
+                text = function() return within() or "" end,
+                max_width = width - PAD * 2,
+                ellipsize = "start",
+                color = look.text_faint,
+                font = look.expressive,
+                size = look.font_secondary - 1,
+                offset_y = -6,
             },
         }, function() return e.value end)),
     }

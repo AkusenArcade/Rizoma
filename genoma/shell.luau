@@ -1,6 +1,6 @@
 --!strict
--- Rizoma, a file manager. This version reads: no operation here can change
--- a file (docs/plan.md, phase 1).
+-- Rizoma, a file manager (docs/plan.md). What changes a file is asked of
+-- core/operations, and nowhere else.
 --
 --   genoma Rizoma/genoma                   (RIZOMA_FOLDER: where it opens)
 --   genoma ipc rizoma open <folder>        (GENOMA_IPC names the socket)
@@ -8,9 +8,11 @@ local g = require("@genoma")
 local browser = require("core/browser")
 local config = require("core/config")
 local exchange = require("core/exchange")
+local operations = require("core/operations")
 local format = require("core/format")
 local paths = require("core/paths")
 local selection = require("core/selection")
+local files = require("@genoma/files")
 local mime = require("@genoma/mime")
 local look = require("ui/look")
 local ui = require("ui/controls")
@@ -18,7 +20,12 @@ local path_bar = require("ui/path_bar")
 local sidebar = require("ui/sidebar")
 local grid = require("ui/grid")
 local list = require("ui/list")
+local actions = require("ui/actions")
 local drag_picture = require("ui/drag_picture")
+local foot_field = require("ui/foot_field")
+local jobs_cell = require("ui/jobs_cell")
+local menu = require("ui/menu")
+local rename = require("ui/rename")
 local preview = require("ui/preview")
 local view_cell = require("ui/view_cell")
 
@@ -66,13 +73,36 @@ local function stop_filtering()
 end
 -- Another folder is another search.
 g.watch(function() return browser.here.value end, function() filtering.value = false end)
--- The best guess stands ready for Return.
+-- The best guess stands ready for Return, until one is chosen instead: as more
+-- is found it stays the first.
+local guessed: string? = nil
 g.watch(function() return browser.filter.value .. "\0" .. browser.dir.count end, function()
-    if g.untracked(function() return browser.filter.value end) ~= ""
-        and g.untracked(function() return browser.index.value end) == nil then
+    if g.untracked(function() return browser.filter.value end) == "" then return end
+    local at = g.untracked(function() return browser.cursor.value end)
+    local shown = g.untracked(function() return browser.index.value end)
+    if shown == nil or at == guessed then
         browser.stand(1)
+        guessed = g.untracked(function() return browser.cursor.value end)
     end
 end)
+
+-- ---- A new folder -------------------------------------------------------------------
+
+local naming = g.signal(false)
+local new_name = g.signal("")
+local function new_folder()
+    stop_filtering()
+    new_name.value = operations.free_name("New folder")
+    naming.value = true
+end
+actions.new_folder = new_folder
+local function make_folder()
+    local name = g.untracked(function() return new_name.value end)
+    if files:check_name(name) then return end
+    operations.make_folder(name, function() naming.value = false end)
+end
+g.watch(function() return browser.here.value end, function() naming.value = false end)
+g.watch(function() return filtering.value end, function(on: boolean) if on then naming.value = false end end)
 
 -- ---- Keys ---------------------------------------------------------------------------
 
@@ -134,7 +164,11 @@ local function toggle_preview()
 end
 
 local function escape()
-    if g.untracked(function() return view_cell.open.value end) then
+    if g.untracked(function() return naming.value end) then
+        naming.value = false
+    elseif g.untracked(function() return jobs_cell.open.value end) and g.untracked(jobs_cell.quiet) then
+        jobs_cell.open.value = false
+    elseif g.untracked(function() return view_cell.open.value end) then
         view_cell.open.value = false
     elseif g.untracked(function() return peeking.value end) then
         peeking.value = false
@@ -153,10 +187,19 @@ end
 -- (Escape, the arrows up and down, the commands).
 local function key(name: string, text: string?, mods: any)
     if mods.logo then return end
+    if g.untracked(menu.is_open) then
+        menu.key(name)
+        return
+    end
+    if g.untracked(function() return operations.renaming.value end) ~= nil then
+        if name == "Escape" then operations.stop_renaming() end
+        return
+    end
     if g.untracked(function() return path_bar.editing.value end) then
         path_bar.key(name)
         return
     end
+    if g.untracked(function() return naming.value end) and name ~= "Escape" then return end
     if mods.ctrl then
         local letter = string.lower(name)
         if letter == "h" then toggle("hidden")
@@ -168,6 +211,10 @@ local function key(name: string, text: string?, mods: any)
         elseif letter == "a" then selection.all()
         elseif letter == "i" and mods.shift then selection.invert()
         elseif letter == "c" then exchange.copy()
+        elseif letter == "x" then exchange.cut()
+        elseif letter == "v" then operations.paste()
+        elseif letter == "z" then operations.undo_last()
+        elseif letter == "n" and mods.shift then new_folder()
         elseif name == "space" then
             local at = g.untracked(function() return browser.cursor.value end)
             if at then selection.toggle(at) end
@@ -187,10 +234,18 @@ local function key(name: string, text: string?, mods: any)
     if moved(name, mods, true) then return end
     if name == "Return" or name == "KP_Enter" then
         local notice = g.untracked(function() return browser.notice.value end)
-        if notice and notice.act then notice.act() else open_chosen() end
+        if notice and notice.act and not notice.passing then notice.act() else open_chosen() end
     elseif name == "BackSpace" then
         if g.untracked(function() return filtering.value end) then stop_filtering() else browser.up() end
     elseif name == "Escape" then escape()
+    elseif name == "F2" then
+        local e = g.untracked(browser.selected)
+        if e and g.untracked(selection.count) < 2 then operations.rename(e) end
+    elseif name == "F4" then
+        browser.terminal(g.untracked(function() return browser.here.value end))
+    elseif name == "Menu" or (name == "F10" and mods.shift) then
+        local e = g.untracked(browser.selected)
+        if e then actions.on_entry(e, true) else actions.on_ground(true) end
     elseif name == "F5" then browser.dir:reload()
     elseif name == "F9" then toggle_places()
     elseif name == "space" then toggle_preview()
@@ -230,12 +285,12 @@ local function empty_text(): string
     local why = browser.dir.error
     if why then return (WORDS :: any)[why] or `This folder cannot be read: {why}` end
     if browser.dir.count > 0 or browser.dir.loading then return "" end
-    if browser.filter.value ~= "" then return "Nothing by that name" end
+    if browser.filter.value ~= "" then return if browser.dir.searching then "Looking in the folders below" else "Nothing by that name" end
     if browser.dir.total > 0 then return "Only hidden files" end
     return "Nothing here"
 end
 
-local content = g.box {
+local content = g.box(exchange.target({
     overlay = true,
     attach = "corner",
     offset_x = left,
@@ -247,6 +302,9 @@ local content = g.box {
     on_press = function() end,
     on_click = function(button: number)
         if button == 272 then browser.leave()
+        elseif button == 273 then
+            browser.leave()
+            actions.on_ground()
         elseif button == 275 then browser.back()
         elseif button == 276 then browser.forward()
         end
@@ -269,7 +327,7 @@ local content = g.box {
             italic = true,
         },
     },
-}
+}, function() return browser.here.value end))
 
 -- ---- Above it -----------------------------------------------------------------------
 
@@ -313,95 +371,64 @@ local header = g.box {
 -- The foot: on the left what does something, then what there is to say; on
 -- the right the cell that says how folders are shown.
 local FIELD = 240
+-- What the cells on the right take.
+local function right_w(): number return if jobs_cell.there.value then H * 2 + 8 else H end
 -- A question needs the room its answers take.
-local function asking(): boolean return browser.notice.value ~= nil and browser.notice.value.act ~= nil end
-local function wordless(): boolean return width() < (if asking() then 900 else 620) end
-local function word(label: string): number
-    return g.text_width { text = string.upper(label), font = look.technical(), size = look.font_action, weight = 700, tracking = 0.04 }
+local function asking(): boolean return browser.notice.value ~= nil and browser.notice.value.act ~= nil and not browser.notice.value.passing end
+local function wordless(): boolean return width() < (if asking() then 1040 else 760) end
+local function button_w(label: string): number return foot_field.width(label, wordless()) end
+local function field_w(): number
+    return math.min(FIELD, math.max(120, width() - right_w() - GAP * 2 - (look.action_height + 8) * 2))
 end
-local function button_w(label: string): number
-    return if wordless() then look.action_height else math.ceil(word(label)) + 14 * 2 + 16 + 8
-end
-local function field_w(): number return math.min(FIELD, math.max(120, width() - H - GAP * 2 - look.action_height)) end
 local function foot_room(): number
-    local used = (if filtering.value then field_w() else button_w("Filter")) + 8 + button_w("Preview") + GAP
-    return math.max(120, width() - H - GAP - used)
+    local used = (if filtering.value then field_w() else button_w("Filter")) + 8 + button_w("Preview") + 8
+        + (if naming.value then field_w() else button_w("New folder")) + GAP
+    return math.max(120, width() - right_w() - GAP - used)
 end
 
--- FILTER, which becomes the field it opens.
-local function filter_button(): any
-    local over = g.signal(false)
-    local HH = look.action_height
-    local function on(): boolean return filtering.value end
-    return g.capsule {
-        id = "filter",
-        role = "button",
-        name = "Filter",
-        width = function() return if on() then field_w() else button_w("Filter") end,
-        height = HH,
-        radius = HH / 2,
-        clip = true,
-        fill = function() return if on() then look.glass() else look.CLEAR end,
-        rim_top = function() return if on() or over.value then look.primary() else look.node() end,
-        rim_bottom = function() return if on() or over.value then look.primary() else look.node() end,
-        transition = { width = function() return if on() then "cell_open" else "cell_close" end, fill = "ui_change", rim_top = "ui_change", rim_bottom = "ui_change" },
-        on_hover = function(o: boolean) over.value = o end,
-        on_press = function() end,
-        on_click = function(button: number)
-            if button == 272 and not g.untracked(function() return filtering.value end) then filtering.value = true end
-        end,
-        g.box {
-            overlay = true,
-            attach = "corner",
-            offset_x = function() return if wordless() and not on() then (HH - 16) / 2 else 14 end,
-            height = HH,
-            direction = "row",
-            align = "center",
-            gap = 8,
-            ui.glyph("search", 16, on, look.text),
-            g.text {
-                present = function() return not on() and not wordless() end,
-                text = "FILTER",
-                color = look.text,
-                font = look.technical,
-                size = look.font_action,
-                weight = 500,
-                tracking = 0.04,
-            },
-            g.field {
-                id = "filter-field",
-                present = on,
-                width = function() return field_w() - 14 * 2 - 16 - 8 - 24 end,
-                size = look.font_label,
-                font = look.expressive,
-                color = look.text,
-                caret_color = look.primary,
-                selection_color = look.chosen,
-                placeholder = "In this folder",
-                focused = function() return filtering.value and not path_bar.editing.value end,
-                text = function() return browser.filter.value end,
-                on_change = function(text: string) browser.filter.value = text end,
-                on_submit = open_chosen,
-            },
-            g.box {
-                id = "filter-stop",
-                role = "button",
-                name = "Stop filtering",
-                present = on,
-                width = 24,
-                height = HH,
-                align = "center",
-                justify = "center",
-                on_press = function() end,
-                on_click = stop_filtering,
-                ui.glyph("close", 14, function() return false end, look.text_muted),
-            },
-        },
-    }
-end
+-- FILTER and NEW FOLDER, which become the fields they open.
+local filter_button = foot_field.new {
+    id = "filter",
+    label = "Filter",
+    glyph = "search",
+    open = function() return filtering.value end,
+    on_open = function() filtering.value = true end,
+    bare = wordless,
+    room = field_w,
+    placeholder = "Here and below",
+    stop = "Stop filtering",
+    focused = function() return not path_bar.editing.value and operations.renaming.value == nil and not menu.is_open() end,
+    text = function() return browser.filter.value end,
+    on_change = function(text: string) browser.filter.value = text end,
+    on_submit = open_chosen,
+    on_stop = stop_filtering,
+}
+local naming_button = foot_field.new {
+    id = "new-folder",
+    label = "New folder",
+    glyph = "plus",
+    dashed = true,
+    open = function() return naming.value end,
+    on_open = new_folder,
+    bare = wordless,
+    room = field_w,
+    placeholder = "Its name",
+    stop = "No new folder",
+    select = "all",
+    focused = function() return not path_bar.editing.value and operations.renaming.value == nil and not menu.is_open() end,
+    wrong = function() return files:check_name(new_name.value) ~= nil end,
+    text = function() return new_name.value end,
+    on_change = function(text: string) new_name.value = text end,
+    on_submit = function() make_folder() end,
+    on_stop = function() naming.value = false end,
+}
 
 local function said(): (string, string)
     local n = selection.count()
+    if n < 2 and browser.filter.value ~= "" and (browser.dir.searching or browser.dir.capped) then
+        local found = browser.dir.count
+        return if browser.dir.searching then "Looking in the folders below" else "The first of many", if found > 0 then `{found} found` else ""
+    end
     if n > 1 and not (preview_pinned() or peeking.value) then
         local sum = selection.sum.value
         return `{n} selected`, if sum.bytes and sum.files > 0 then format.size(sum.bytes) else ""
@@ -433,6 +460,23 @@ local function pill(present: () -> boolean, ...: any): any
     }
 end
 
+local function notice_button(kind: string, passing: boolean): any
+    return ui.action {
+        id = if passing then "notice-back" else "notice-yes",
+        name = "Do it",
+        kind = kind,
+        present = function()
+            local n = browser.notice.value
+            return n ~= nil and (n.passing == true) == passing
+        end,
+        label = function() return if browser.notice.value then browser.notice.value.label or "" else "" end,
+        on_click = function()
+            local n = g.untracked(function() return browser.notice.value end)
+            if n and n.act then n.act() end
+        end,
+    }
+end
+
 local foot = g.box {
     overlay = true,
     attach = "corner",
@@ -447,7 +491,7 @@ local foot = g.box {
         direction = "row",
         align = "center",
         gap = 8,
-        filter_button(),
+        filter_button,
         ui.action {
             id = "preview-button",
             label = "Preview",
@@ -456,12 +500,13 @@ local foot = g.box {
             lit = function() return preview_pinned() or peeking.value end,
             on_click = toggle_preview,
         },
+        naming_button,
     },
     pill(
         function() return browser.notice.value ~= nil end,
         g.text {
             text = function() return if browser.notice.value then browser.notice.value.text else "" end,
-            max_width = function() return math.max(60, foot_room() - (if asking() then 218 else 40)) end,
+            max_width = function() return math.max(60, foot_room() - (if asking() then 218 elseif browser.notice.value and browser.notice.value.act then 140 else 40)) end,
             ellipsize = "middle",
             color = look.text,
             font = look.expressive,
@@ -472,16 +517,15 @@ local foot = g.box {
             direction = "row",
             align = "center",
             gap = 8,
-            ui.action { id = "notice-no", label = "Cancel", on_click = function() browser.say(nil) end },
             ui.action {
-                id = "notice-yes",
-                label = "Run",
-                kind = "filled",
-                on_click = function()
-                    local n = g.untracked(function() return browser.notice.value end)
-                    if n and n.act then n.act() end
-                end,
+                id = "notice-no",
+                label = "Cancel",
+                present = function() return not (browser.notice.value and browser.notice.value.passing) end,
+                on_click = function() browser.say(nil) end,
             },
+            -- What is asked stands out; what is only offered does not.
+            notice_button("filled", false),
+            notice_button("outline", true),
         }
     ),
     pill(
@@ -491,13 +535,19 @@ local foot = g.box {
         end,
         g.text {
             text = function() return (said()) end,
-            max_width = function() return math.max(100, foot_room() - 260) end,
+            max_width = function()
+                local _, figures = said()
+                local w = if foot_room() > 380 and figures ~= ""
+                    then g.text_width { text = figures, font = look.technical(), size = look.font_meta } + 16 else 0
+                return math.max(100, foot_room() - 40 - w)
+            end,
             ellipsize = "middle",
             color = look.text,
             font = look.expressive,
             size = look.font_label,
         },
         g.text {
+            present = function() return foot_room() > 380 end,
             text = function()
                 local _, figures = said()
                 return figures
@@ -511,12 +561,33 @@ local foot = g.box {
 }
 
 -- Where what is stood on is drawn in the window, while it is in view.
+local function named_at(): any
+    local r = operations.renaming.value
+    local i = if r then browser.dir:index(r.path) else nil
+    if i == nil then return nil end
+    local n = if config.get("view") == "grid" then grid.name_rect(i) else list.name_rect(i, width())
+    if n == nil then return nil end
+    n.x += left()
+    n.y += top
+    return n
+end
+
 local function stood_at(): any
     local i = browser.index.value
     if i == nil then return nil end
     local r = if config.get("view") == "grid" then grid.rect(i) else list.rect(i, width())
     if r.y + r.h < 0 or r.y > height() then return nil end
     return { x = left() + r.x, y = top + r.y, w = r.w, h = r.h }
+end
+
+-- The menu, asked for by key, at what is stood on.
+actions.at = function(items: any)
+    local at = g.untracked(stood_at)
+    if at then
+        menu.open(items, at.x + at.w / 2, at.y + at.h / 2)
+    else
+        menu.open(items, g.untracked(left) + 24, top + 24)
+    end
 end
 
 local preview_pane = preview.new {
@@ -575,6 +646,9 @@ g.ipc("rizoma", {
         config.set(name, v)
         return "ok"
     end,
+    find = function(...: string): string filter(table.concat({ ... }, " ")) return "ok" end,
+    count = function(): string return tostring(g.untracked(function() return browser.dir.count end)) end,
+    searching = function(): string return tostring(g.untracked(function() return browser.dir.searching end)) end,
     key = function(name: string, ctrl: string?): string
         key(name, if #name == 1 then name else nil, { ctrl = ctrl == "ctrl", alt = ctrl == "alt", shift = ctrl == "shift", logo = false })
         return "ok"
@@ -611,7 +685,14 @@ local window = g.window {
             top = function() return top end,
             height = function() return area.value.h end,
         },
+        rename.new {
+            at = named_at,
+            area = function() return area.value end,
+            left = left,
+        },
+        jobs_cell.new(function() return area.value end),
         view_cell.new(function() return area.value end),
+        menu.new(function() return area.value end),
     },
 }
 

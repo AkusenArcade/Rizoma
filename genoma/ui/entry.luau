@@ -4,6 +4,7 @@
 local g = require("@genoma")
 local thumbnails = require("@genoma/thumbnails")
 local browser = require("core/browser")
+local actions = require("ui/actions")
 local exchange = require("core/exchange")
 local icons = require("core/icons")
 local selection = require("core/selection")
@@ -11,6 +12,11 @@ local look = require("ui/look")
 local ui = require("ui/controls")
 
 local M = {}
+
+-- Where the last press was, for what it would drag.
+local pressed = g.signal("")
+M.pressed = pressed
+local function pressed_path(): string return g.untracked(function() return pressed.value end) end
 
 -- `entry()` may be nil while its row goes.
 function M.picture(entry: () -> any, size: number, pictured: boolean): any
@@ -67,14 +73,25 @@ function M.picture(entry: () -> any, size: number, pictured: boolean): any
     }
 end
 
+-- Whether a drag that would go into it is over it.
+function M.welcoming(e: any): boolean
+    return e ~= nil and e.dir and exchange.welcome(e.path)
+end
+
 function M.faded(e: any): number
     if e == nil then return 0 end
+    -- Cut, it is on its way.
+    if exchange.is_cut(e.path) then return 0.45 end
     return if e.broken then 0.4 elseif e.hidden then 0.6 else 1
 end
 
--- Where the last press was, for what it would drag.
-local pressed = g.signal("")
-M.pressed = pressed
+-- What a drag from the entry last pressed carries.
+exchange.carried = function(): { string }
+    local path = pressed_path()
+    if path == "" then return {} end
+    return if g.untracked(function() return selection.has(path) end) then selection.list() else { path }
+end
+
 -- A finger held on an entry starts choosing several: a tap is then one more
 -- or one less, until none is left.
 local tapping = g.signal(false)
@@ -105,6 +122,16 @@ function M.held(e: any)
     tapping.value = true
     browser.cursor.value = e.path
     selection.toggle(e.path)
+    if g.untracked(function() return selection.has(e.path) end) then actions.on_entry(e) end
+end
+
+-- The right button on one: it joins those chosen, or is chosen instead.
+function M.menu(e: any)
+    if not g.untracked(function() return selection.has(e.path) end) then
+        browser.cursor.value = e.path
+        selection.only(e.path)
+    end
+    actions.on_entry(e)
 end
 
 -- What presses do to an entry, the same in both views: props for its node.
@@ -129,6 +156,7 @@ function M.handlers(node: { [any]: any }, entry: () -> any): { [any]: any }
         if e == nil then return end
         if button == 275 then browser.back() return end
         if button == 276 then browser.forward() return end
+        if button == 273 then M.menu(e) return end
         if button == 272 then M.clicked(e, count) end
     end
     node.on_long_press = function(_: number, _: number, touch: boolean): boolean
@@ -142,7 +170,13 @@ function M.handlers(node: { [any]: any }, entry: () -> any): { [any]: any }
         if e == nil or pressed.value ~= e.path then return "" end
         return exchange.dragged(if selection.has(e.path) then selection.list() else { e.path })
     end
-    return node
+    node.drag_actions = "both"
+    -- On a folder it goes into it, beside one where one is.
+    return exchange.target(node, function(): string?
+        local e = entry()
+        if e == nil then return nil end
+        return if e.dir and not e.broken then e.path else browser.here.value
+    end, true)
 end
 
 return M

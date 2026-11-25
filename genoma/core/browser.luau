@@ -33,11 +33,14 @@ M.dir = g.directory {
     folders_first = function() return config.get("folders_first") end,
     hidden = function() return config.get("hidden") end,
     filter = function() return M.filter.value end,
+    -- What is typed is looked for in the folders below too.
+    deep = true,
 }
 
 -- What has to be said once: a file nothing opens, a question before a
 -- program runs. `act` is what its button does.
-export type Notice = { text: string, label: string?, act: (() -> ())? }
+-- `passing`: offered, not asked: it goes by itself.
+export type Notice = { text: string, label: string?, act: (() -> ())?, passing: boolean? }
 M.notice = g.signal(nil :: Notice?)
 local quiet: any = nil
 function M.say(notice: Notice?)
@@ -45,8 +48,8 @@ function M.say(notice: Notice?)
     quiet = nil
     M.notice.value = notice
     -- A question waits for its answer; the rest goes by itself.
-    if notice and notice.act == nil then
-        quiet = g.after(5, function()
+    if notice and (notice.act == nil or notice.passing) then
+        quiet = g.after(if notice.passing then 8 else 5, function()
             quiet = nil
             M.notice.value = nil
         end)
@@ -142,6 +145,24 @@ local function launch(app: any, path: string)
     g.activation_token {
         app_id = app.id,
         on_token = function(token: string?) apps:launch(app.id, nil, { path }, token) end,
+    }
+end
+
+-- With an application chosen for it.
+function M.open_with(app: any, list: { string })
+    g.activation_token {
+        app_id = app.id,
+        on_token = function(token: string?) apps:launch(app.id, nil, list, token) end,
+    }
+end
+
+-- A folder in the desktop's terminal.
+function M.terminal(folder: string)
+    g.activation_token {
+        on_token = function(token: string?)
+            local ok, why = pcall(function() apps:terminal(folder, token) end)
+            if not ok then M.say { text = if string.find(tostring(why), "no terminal") then "No terminal is installed" else "The terminal did not start" } end
+        end,
     }
 end
 

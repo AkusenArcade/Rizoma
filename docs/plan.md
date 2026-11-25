@@ -1,6 +1,6 @@
 # Rizoma — plan
 
-Status: phases 1 to 3 built, 2026-11-25 (`genoma/`). Pace: slow, no deadline.
+Status: phases 1 to 4 built, 2026-11-25 (`genoma/`). Pace: slow, no deadline.
 
 ## 1. What it is
 
@@ -128,7 +128,7 @@ As built (2026-11-25). No title bar, as every Genoma app:
 │ bookmarks│   grid or list, straight on the window's ground
 │ computer │
 │          │
-└──────────┘ [filter][preview] (what is stood on · a notice)  (view)
+└──────────┘ [filter][preview][new folder] (what is stood on · a notice) (jobs)(view)
 ```
 
 - **The path is a rhizome**: each folder a capsule, a thread between them.
@@ -151,8 +151,8 @@ As built (2026-11-25). No title bar, as every Genoma app:
   the path's capsules: outline (plain, filled while it is on), filled (does
   what is asked), dashed (makes something new: new folder, new tab). Only what
   opens a menu or a panel looks like a cell.
-- **Foot**: FILTER, which becomes the field it opens, and PREVIEW; then what is
-  stood on (the grid only: the list says it in its columns) or a notice. In a
+- **Foot**: FILTER and NEW FOLDER, which become the fields they open, and
+  PREVIEW; then what is stood on (the grid only: the list says it in its columns) or a notice. In a
   narrow window the buttons keep their drawing only.
 - **Preview** (space, or the view cell): a pane that grows from the entry stood
   on and goes back to it. Pinned beside the folder where both have room (660),
@@ -170,9 +170,32 @@ As built (2026-11-25). No title bar, as every Genoma app:
   finger held on an entry, then taps. By path: it keeps through another order,
   and what is no longer shown is no longer selected.
 - **Exchange**: Ctrl+C offers `text/uri-list`, `x-special/gnome-copied-files`
-  and the paths as text; dragged out, what is selected is given to be copied,
-  never to be moved; under the pointer the first of it, one over the other,
+  and the paths as text; dragged out, what is selected is given to be copied
+  or moved, as the program it is dropped on says; under the pointer the first of it, one over the other,
   and its name or how many. 50 000 selected in 30 ms, copied in 75.
+
+- **The filter looks below too** (Akusen, 2026-11-25): what is typed is looked
+  for in this folder and, 0.15 s after the last letter, in all those under it:
+  this folder's own first, then the nearest. Under a name found below, the way
+  to it; from its menu, *Show in its folder*. Not into networks, links, hidden
+  folders (unless shown); the first 10 000. His home, 730 000 files: 0.7 s.
+- **The menu** of the right button (a finger held, the Menu key) grows from
+  where it was pressed. What has more of its own (*Open with*) opens it in
+  place.
+- **Operations** (`core/operations`, the only place that asks for one): paste
+  from any file manager and Ctrl+X, drop on a folder, a place, a step of the
+  path or the ground (held over one, it opens), rename in place, new folder.
+  Dropped from here it is moved on one disk and copied to another, Ctrl copies,
+  Shift moves; from another program it is copied, Shift moves. (Umbriel tells
+  nobody a key pressed while dragging: there Ctrl counts if held before.)
+- **What is being done**: a ring that buds from the view's button once
+  something takes half a second, and the cell that grows from it: how far, how
+  fast, pause, stop. A question opens it; the answer that loses nothing stands
+  out.
+- **Undo** (Ctrl+Z, and beside the notice of what went elsewhere): the last
+  thing done, while it can be put back whole. Moved: moved back; copied or made:
+  to the trash; renamed: its name back. Never of what was merged with or put in
+  place of something.
 
 Responsive by the window's size: the sidebar collapses to a button, the list
 loses its type, then its date, then its size; the grid's columns are computed
@@ -182,8 +205,8 @@ a drag past a threshold moves, a tap selects.
 Keys: arrows, Home/End, Page Up/Down, Enter, BackSpace and Alt+↑ (up),
 Alt+←/→, Alt+Home, Ctrl+H, Ctrl+L, Ctrl+F or just typing (filter), Ctrl+1/2
 (grid, list), F5 or Ctrl+R, F9 (places),
-space (preview), Ctrl+C, Escape. With their phases: Ctrl+X/V,
-F2, Delete (trash), Shift+Delete (confirmed), Ctrl+T/W, Ctrl+Shift+N.
+space (preview), Ctrl+C/X/V, Ctrl+Z, F2, F4 (terminal), Ctrl+Shift+N, Menu,
+Escape. With their phases: Delete (trash), Shift+Delete (confirmed), Ctrl+T/W.
 
 What runs a program (executables, `.desktop`, AppImage, Windows programs,
 Java archives) is asked before, whatever opens it; a shell script opens as the
@@ -219,9 +242,9 @@ text it is.
 3. **Selection and exchange**: selection in every form, copy/paste and
    drag with other programs (Rizoma only *gives* files out at this stage).
 4. **`files` in Genoma**: the operations service and its test suite —
-   alone, headless, until it passes (done, 2026-11-25). Then Rizoma's paste,
-   drop, rename, new folder and the operations panel; the menu of the right
-   button (and of a long press), with *Open with* and *Open in the terminal*.
+   alone, headless, until it passes. Then Rizoma's paste, drop, rename, new
+   folder and the operations panel; the menu of the right button (and of a long
+   press), with *Open with* and *Open in the terminal*. Done, 2026-11-25.
 5. **Trash**: service, delete to trash, the trash place with restore and
    empty.
 6. **Panes and tabs**: the browser and the selection made one for each pane;
@@ -243,16 +266,14 @@ Rust tests for the services; live runs on scratch folders.
 - View: one global choice (grid or list, sort, hidden), as Nautilus does,
   not remembered per folder.
 
+- A colour is kept as an extended attribute of the file
+  (`user.rizoma.colour`), which follows a rename and a move on its disk; where
+  a disk has none, in a file of Rizoma's (Akusen, 2026-11-25). Genoma is to read
+  it with a folder's entries and keep it in its copies.
+- A colour is drawn as the capsule the name is in, in both views (Akusen,
+  2026-11-25; draft B of `docs/drafts/colours.png`). Six hues of one lightness,
+  none of them the state colours, which say load.
+
 ## 9. Open
 
-- **Where a colour is kept.** As an extended attribute of the file
-  (`user.rizoma.colour`): it follows a rename and a move on the same disk, is
-  seen by nobody else, and is lost on disks without attributes (FAT, some
-  network ones) and by programs that copy without them. Or in a file of
-  Rizoma's: works anywhere, and loses track of what other programs move.
-  *Leaning: the attribute, with the file for where there are none.* Genoma
-  would read it with a folder's entries and keep it in its copies.
-- **How a colour is drawn.** Not the state colours, which say load. A few hues
-  of one lightness; on the picture's corner, the name, or the row's ground.
-  To be seen before it is chosen.
 - **Whether a tab is remembered** when the window closes.

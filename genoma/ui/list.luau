@@ -5,6 +5,7 @@ local g = require("@genoma")
 local mime = require("@genoma/mime")
 local browser = require("core/browser")
 local config = require("core/config")
+local operations = require("core/operations")
 local format = require("core/format")
 local look = require("ui/look")
 local ui = require("ui/controls")
@@ -95,6 +96,16 @@ local function row(width: () -> number): (() -> number, any) -> any
             local it = e.value
             return it ~= nil and browser.cursor.value == it.path
         end
+        local function edge(): string
+            if entry_ui.welcoming(e.value) then return look.primary() end
+            return if stood() and not chosen() then look.node() else look.CLEAR
+        end
+        local function name_w(): number
+            local it = e.value
+            local room = name_room(width())
+            if it == nil or it.within == nil then return room end
+            return math.max(60, math.floor(room * 0.62))
+        end
         local function figure(text: () -> string, w: number, align: string, present: () -> boolean): any
             return g.box {
                 present = present,
@@ -123,11 +134,11 @@ local function row(width: () -> number): (() -> number, any) -> any
             gap = GAP,
             radius = look.radius_well,
             fill = function()
-                if chosen() then return look.chosen() end
+                if chosen() or entry_ui.welcoming(e.value) then return look.chosen() end
                 return if over.value == item() then look.hovered() else look.CLEAR
             end,
-            rim_top = function() return if stood() and not chosen() then look.node() else look.CLEAR end,
-            rim_bottom = function() return if stood() and not chosen() then look.node() else look.CLEAR end,
+            rim_top = edge,
+            rim_bottom = edge,
             g.box {
                 width = function() return name_room(width()) + 38 end,
                 direction = "row",
@@ -143,12 +154,27 @@ local function row(width: () -> number): (() -> number, any) -> any
                     entry_ui.picture(function() return e.value end, 28, false),
                     g.text {
                         text = function() return if e.value then e.value.name else "" end,
-                        max_width = function() return name_room(width()) end,
+                        max_width = name_w,
                         ellipsize = "middle",
                         color = look.text,
                         font = look.expressive,
                         size = look.font_name,
                         weight = look.weight_name,
+                        opacity = function()
+                            local it = e.value
+                            local r = operations.renaming.value
+                            return if it and r and r.path == it.path then 0 else 1
+                        end,
+                    },
+                    -- Found below, the way to it.
+                    g.text {
+                        present = function() return e.value ~= nil and e.value.within ~= nil end,
+                        text = function() return if e.value and e.value.within then e.value.within else "" end,
+                        max_width = function() return math.max(40, name_room(width()) - name_w() - 10) end,
+                        ellipsize = "start",
+                        color = look.text_faint,
+                        font = look.expressive,
+                        size = look.font_secondary,
                     },
                 }, function() return e.value end)),
             },
@@ -232,6 +258,12 @@ function M.new(width: () -> number, height: () -> number): any
                 entry_ui.clicked(e, count)
                 return true
             end,
+            menu = function(y: number): boolean
+                local e = g.untracked(function() return at(y) end)
+                if e == nil then return false end
+                entry_ui.menu(e)
+                return true
+            end,
             held = function(y: number)
                 local e = g.untracked(function() return at(y) end)
                 if e then entry_ui.held(e) end
@@ -262,6 +294,15 @@ end
 -- Where an entry is drawn, from the view's corner.
 function M.rect(index: number, width: number): { x: number, y: number, w: number, h: number }
     return { x = 0, y = HEAD + (index - 1) * ROW - scrolled.value, w = width, h = ROW }
+end
+
+-- Where an entry's name is, and how wide.
+function M.name_rect(index: number, width: number): any
+    local e = browser.dir:at(index)
+    if e == nil then return nil end
+    local r = M.rect(index, width)
+    local w = g.text_width { text = e.name, font = look.expressive(), size = look.font_name, weight = look.weight_name }
+    return { x = r.x + PAD + 38, y = r.y, w = math.min(math.ceil(w), name_room(width)), h = ROW, centred = false }
 end
 
 M.row_height = ROW

@@ -5,12 +5,13 @@ local g = require("@genoma")
 local config = require("core/config")
 local look = require("ui/look")
 local ui = require("ui/controls")
+local foot_cell = require("ui/foot_cell")
 
 local M = {}
 
 M.open = g.signal(false)
 
-local BUTTON, GAP_UP, PAD, LABEL_W, WIDTH = look.cell_height, 10, 22, 108, 460
+local PAD, LABEL_W, WIDTH = 22, 108, 460
 
 local function row(name: string, control: any, present: (() -> boolean)?): any
     return g.box {
@@ -35,39 +36,16 @@ end
 
 local SPAN = config.ICON_MAX - config.ICON_MIN
 
+-- Where its button is.
+function M.x(area: { w: number, h: number }): number return area.w - look.margin_edge - foot_cell.BUTTON end
+
 -- `area()`: the window's { w, h }.
 function M.new(area: () -> { w: number, h: number }): any
-    local content_h = g.signal(280)
-    local there = g.signal(false)
-    local grown = g.signal(false)
-    local putting_away: any = nil
-    g.watch(function() return M.open.value end, function(on: boolean)
-        if putting_away then putting_away:stop() end
-        putting_away = nil
-        if on then
-            there.value = true
-            g.after(0, function() grown.value = g.untracked(function() return M.open.value end) end)
-        else
-            grown.value = false
-            putting_away = g.after(look.CLOSE, function()
-                putting_away = nil
-                there.value = false
-            end)
-        end
-    end)
-    local function timing(): string return if grown.value then "cell_open" else "cell_close" end
-    local E = look.margin_edge
-    local function width(): number return math.min(WIDTH, area().w - E * 2) end
-    local function bx(): number return area().w - E - BUTTON end
-    local function by(): number return area().h - E - BUTTON end
-
     local content = g.box {
         direction = "column",
         align = "stretch",
         gap = look.gap,
         padding = PAD,
-        opacity = function() return if grown.value then 1 else 0 end,
-        transition = { opacity = function() return if grown.value then "content_in" else "content_out" end },
         row("View", ui.segmented {
             id = "view",
             options = { { key = "grid", label = "Grid" }, { key = "list", label = "List" } },
@@ -107,68 +85,32 @@ function M.new(area: () -> { w: number, h: number }): any
         }, function() return config.get("view") == "grid" end),
     }
 
-    local outside = g.box {
-        overlay = true,
-        attach = "corner",
-        present = function() return M.open.value end,
-        width = function() return area().w end,
-        height = function() return area().h end,
-        on_press = function() end,
-        on_click = function() M.open.value = false end,
-    }
-    local panel = g.capsule {
-        id = "view-cell",
+    return foot_cell.new {
+        id = "view",
         name = "View",
-        overlay = true,
-        attach = "corner",
-        present = function() return there.value end,
-        offset_x = function() return if grown.value then area().w - E - width() else bx() end,
-        offset_y = function() return if grown.value then by() - GAP_UP - content_h.value else by() end,
-        width = function() return if grown.value then width() else BUTTON end,
-        height = function() return if grown.value then content_h.value else BUTTON end,
-        radius = function() return if grown.value then look.radius_panel else BUTTON / 2 end,
-        opacity = function() return if grown.value then 1 else 0 end,
-        clip = true,
-        fill = look.glass_over,
-        rim_top = look.rim,
-        rim_bottom = look.line,
-        backdrop_blur = look.glass_blur,
-        transition = { offset_x = timing, offset_y = timing, width = timing, height = timing, radius = timing, opacity = timing },
-        on_press = function() end,
-        on_click = function() end,
-        g.box {
-            overlay = true,
-            attach = "corner",
-            width = width,
-            direction = "column",
-            align = "stretch",
-            on_size = function(_: number, h: number) content_h.value = h end,
-            content,
-        },
-    }
-    local button = ui.round {
-        id = "view-button",
-        name = "View",
-        glyph = "rizoma",
-        glyph_size = 20,
-        lit = function() return M.open.value end,
-        on_click = function() M.open.value = not g.untracked(function() return M.open.value end) end,
-        props = {
-            overlay = true,
-            attach = "corner",
-            offset_x = bx,
-            offset_y = by,
-            backdrop_blur = look.glass_blur,
-        },
-    }
-    return g.box {
-        overlay = true,
-        attach = "corner",
-        width = function() return area().w end,
-        height = function() return area().h end,
-        outside,
-        panel,
-        button,
+        area = area,
+        x = function() return M.x(area()) end,
+        open = M.open,
+        width = WIDTH,
+        outside = true,
+        content = content,
+        button = function(bx: () -> number, by: () -> number): any
+            return ui.round {
+                id = "view-button",
+                name = "View",
+                glyph = "rizoma",
+                glyph_size = 20,
+                lit = function() return M.open.value end,
+                on_click = function() M.open.value = not g.untracked(function() return M.open.value end) end,
+                props = {
+                    overlay = true,
+                    attach = "corner",
+                    offset_x = bx,
+                    offset_y = by,
+                    backdrop_blur = look.glass_blur,
+                },
+            }
+        end,
     }
 end
 

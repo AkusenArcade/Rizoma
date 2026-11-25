@@ -4,6 +4,8 @@
 local g = require("@genoma")
 local browser = require("core/browser")
 local places = require("core/places")
+local exchange = require("core/exchange")
+local actions = require("ui/actions")
 local look = require("ui/look")
 local ui = require("ui/controls")
 local scroll_mark = require("ui/scroll_mark")
@@ -15,11 +17,12 @@ local PAD, BUTTON, ROW, ICON = 8, look.cell_height, 40, 22
 
 local function row(place: () -> any): any
     local over = g.signal(false)
+    local function welcome(): boolean return exchange.welcome(place().path) end
     local function here(): boolean
         local p = places.of(browser.here.value)
         return p ~= nil and p.path == place().path
     end
-    return g.capsule {
+    return g.capsule(exchange.target({
         role = "button",
         height = ROW,
         padding_x = 12,
@@ -29,16 +32,18 @@ local function row(place: () -> any): any
         justify = "start",
         radius = look.radius_panel - PAD,
         fill = function()
-            if here() then return look.chosen() end
+            if here() or welcome() then return look.chosen() end
             return if over.value then look.hovered() else look.CLEAR
         end,
-        rim_top = look.CLEAR,
-        rim_bottom = look.CLEAR,
+        rim_top = function() return if welcome() then look.primary() else look.CLEAR end,
+        rim_bottom = function() return if welcome() then look.primary() else look.CLEAR end,
         transition = { fill = "ui_change" },
         on_hover = function(on: boolean) over.value = on end,
         on_press = function() end,
         on_click = function(button: number)
-            if button == 272 then M.chose(g.untracked(place).path) end
+            if button == 272 then M.chose(g.untracked(place).path)
+            elseif button == 273 then actions.on_place(g.untracked(place).path, function() M.chose(g.untracked(place).path) end)
+            end
         end,
         ui.glyph(g.untracked(place).glyph, ICON, here, look.text_muted),
         g.text {
@@ -53,7 +58,7 @@ local function row(place: () -> any): any
             weight = function() return if here() then 700 else 500 end,
             tracking = 0.02,
         },
-    }
+    }, function() return place().path end, true))
 end
 
 local function group(name: string): any

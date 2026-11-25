@@ -27,6 +27,11 @@ function M.name(path: string): string
     return string.match(path, "([^/]+)/?$") or "/"
 end
 
+-- What a folder is called where it is spoken of.
+function M.called(path: string): string
+    return if path == M.home then "Home" elseif path == "/" then "Computer" else M.name(path)
+end
+
 -- Whether `path` is `folder` or somewhere inside it.
 function M.inside(path: string, folder: string): boolean
     if path == folder or folder == "/" then return true end

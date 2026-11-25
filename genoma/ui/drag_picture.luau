@@ -3,6 +3,7 @@
 -- them, one over the other, and how they are called or how many they are.
 local g = require("@genoma")
 local browser = require("core/browser")
+local exchange = require("core/exchange")
 local selection = require("core/selection")
 local look = require("ui/look")
 local entry_ui = require("ui/entry")
@@ -42,6 +43,8 @@ function M.new(): any
     local stack: { [any]: any } = { width = ICON + (STACK - 1) * STEP, height = ICON + 6 }
     for k = STACK, 1, -1 do table.insert(stack, card(k)) end
     local function label(): string
+        local would = exchange.would()
+        if would then return would end
         local c = carried.value
         if c.count > 1 then return `{c.count} items` end
         return if c.entries[1] then c.entries[1].name else ""

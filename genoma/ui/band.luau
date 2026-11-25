@@ -4,6 +4,7 @@
 -- scrolls.
 local g = require("@genoma")
 local browser = require("core/browser")
+local actions = require("ui/actions")
 local selection = require("core/selection")
 local look = require("ui/look")
 
@@ -101,6 +102,12 @@ function M.new(t: { [string]: any }, inner: any): any
         on_click = function(button: number, _: number, y: number, count: number)
             if button == 275 then browser.back() return end
             if button == 276 then browser.forward() return end
+            if button == 273 then
+                if t.menu and t.menu(y + g.untracked(t.scroll)) then return end
+                browser.leave()
+                actions.on_ground()
+                return
+            end
             if button ~= 272 or far then return end
             if t.ground and t.ground(y + g.untracked(t.scroll), count) then return end
             local m = g.untracked(g.modifiers)
