@@ -5,7 +5,6 @@ local g = require("@genoma")
 local mime = require("@genoma/mime")
 local browser = require("core/browser")
 local config = require("core/config")
-local operations = require("core/operations")
 local format = require("core/format")
 local look = require("ui/look")
 local ui = require("ui/controls")
@@ -152,20 +151,15 @@ local function row(width: () -> number): (() -> number, any) -> any
                     gap = 10,
                     opacity = function() return entry_ui.faded(e.value) end,
                     entry_ui.picture(function() return e.value end, 28, false),
-                    g.text {
+                    entry_ui.name(function() return e.value end, g.text {
                         text = function() return if e.value then e.value.name else "" end,
-                        max_width = name_w,
+                        max_width = function() return name_w() - entry_ui.marked(e.value) end,
                         ellipsize = "middle",
                         color = look.text,
                         font = look.expressive,
                         size = look.font_name,
                         weight = look.weight_name,
-                        opacity = function()
-                            local it = e.value
-                            local r = operations.renaming.value
-                            return if it and r and r.path == it.path then 0 else 1
-                        end,
-                    },
+                    }),
                     -- Found below, the way to it.
                     g.text {
                         present = function() return e.value ~= nil and e.value.within ~= nil end,

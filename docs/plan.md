@@ -1,6 +1,6 @@
 # Rizoma — plan
 
-Status: phases 1 to 5 built, 2026-11-25 (`genoma/`). Pace: slow, no deadline.
+Status: phases 1 to 5 and the colours built, 2026-11-25 (`genoma/`). Pace: slow, no deadline.
 
 ## 1. What it is
 
@@ -200,6 +200,13 @@ As built (2026-11-25). No title bar, as every Genoma app:
   back first. For good (Shift+Delete, Delete in the trash, EMPTY) it is asked,
   with how many and how much: DELETE stands out, and Return is it (Akusen,
   2026-11-25).
+- **Colours**: the name in a capsule of one of six, in both views and the
+  preview; set from a row in the menu and by Alt+1…6 (Alt+0 takes it off).
+  FILTER open, the same row beside it: one pressed shows only what is marked so,
+  here and below. Kept as `user.rizoma.colour` on the thing and by path in
+  `$XDG_DATA_HOME/rizoma/colours.json`, which serves what can have no attribute
+  (links, FAT, what is not ours to write) and what a program saves by putting
+  another file in its place; what Rizoma moves or renames is followed there too.
 - **Undo** (Ctrl+Z, and beside the notice of what went elsewhere): the last
   thing done, while it can be put back whole. Moved: moved back; copied or made:
   to the trash; renamed: its name back. Never of what was merged with or put in
@@ -214,7 +221,7 @@ Keys: arrows, Home/End, Page Up/Down, Enter, BackSpace and Alt+↑ (up),
 Alt+←/→, Alt+Home, Ctrl+H, Ctrl+L, Ctrl+F or just typing (filter), Ctrl+1/2
 (grid, list), F5 or Ctrl+R, F9 (places),
 space (preview), Ctrl+C/X/V, Ctrl+Z, F2, F4 (terminal), Ctrl+Shift+N, Delete
-(trash), Shift+Delete (for good, asked), Menu, Escape. With their phase:
+(trash), Shift+Delete (for good, asked), Alt+0…6 (colours), Menu, Escape. With their phase:
 Ctrl+T/W.
 
 What runs a program (executables, `.desktop`, AppImage, Windows programs,
@@ -258,7 +265,7 @@ text it is.
    empty. Done, 2026-11-25.
 6. **Panes and tabs**: the browser and the selection made one for each pane;
    then two panes, then tabs.
-7. **Comfort**: colours, bookmarks written, search, properties, drives.
+7. **Comfort**: colours (done, 2026-11-25), bookmarks written, search, properties, drives.
 8. **Desktop integration**: `FileManager1`, Rizoma as the default for
    `inode/directory` (today it is Nautilus), Bioma's launcher reveal and
    downloads cell pointing to it.
@@ -277,8 +284,7 @@ Rust tests for the services; live runs on scratch folders.
 
 - A colour is kept as an extended attribute of the file
   (`user.rizoma.colour`), which follows a rename and a move on its disk; where
-  a disk has none, in a file of Rizoma's (Akusen, 2026-11-25). Genoma is to read
-  it with a folder's entries and keep it in its copies.
+  a disk has none, in a file of Rizoma's (Akusen, 2026-11-25).
 - A colour is drawn as the capsule the name is in, in both views (Akusen,
   2026-11-25; draft B of `docs/drafts/colours.png`). Six hues of one lightness,
   none of them the state colours, which say load.

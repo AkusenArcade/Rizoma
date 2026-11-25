@@ -4,6 +4,7 @@ local g = require("@genoma")
 local mime = require("@genoma/mime")
 local browser = require("core/browser")
 local bin = require("core/bin")
+local colours = require("core/colours")
 local exchange = require("core/exchange")
 local operations = require("core/operations")
 local paths = require("core/paths")
@@ -38,6 +39,17 @@ local function with(e: any): { menu.Item }
         table.insert(out, { text = app.name, icon = app.icon, act = function() browser.open_with(app, { e.path }) end })
     end
     return out
+end
+
+-- The colour they all have, or nil.
+local function common(list: { string }): string?
+    local out: string? = nil
+    for k, e in g.untracked(function() return selection.entries(200) end) do
+        local c = colours.of(e)
+        if k > 1 and c ~= out then return nil end
+        out = c
+    end
+    return if #list > 0 then out else nil
 end
 
 local function thrown(e: any, list: { string }): { menu.Item | string }
@@ -83,6 +95,8 @@ function M.on_entry(e: any, by_key: boolean?)
         add "-"
         add { text = "Rename", keys = "F2", act = function() operations.rename(e) end }
     end
+    add "-"
+    add { text = "Colour", colours = { chosen = common(list), pick = function(key: string?) operations.colour(list, key) end } }
     add "-"
     add { text = "Move to the trash", keys = "Del", act = function() operations.throw(list) end }
     show(items, by_key)

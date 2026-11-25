@@ -6,6 +6,7 @@ local g = require("@genoma")
 local files = require("@genoma/files")
 local trash = require("@genoma/trash")
 local browser = require("core/browser")
+local colours = require("core/colours")
 local exchange = require("core/exchange")
 local format = require("core/format")
 local paths = require("core/paths")
@@ -17,7 +18,7 @@ local function here(): string return g.untracked(function() return browser.here.
 
 -- What was found is not followed: it is looked at again after a change.
 local function look_again()
-    if g.untracked(function() return browser.filter.value end) ~= "" then browser.dir:reload() end
+    if g.untracked(browser.looking) then browser.dir:reload() end
 end
 
 -- ---- What comes of it -----------------------------------------------------------------
@@ -231,7 +232,10 @@ function M.delete(list: { string })
         if in_trash then
             trash:erase(list)
         else
-            files:delete(list, function() look_again() end)
+            files:delete(list, function(r: any)
+                if not r.cancelled and #r.skipped == 0 then colours.gone(list) end
+                look_again()
+            end)
         end
     end)
 end
@@ -284,6 +288,7 @@ function put(list: { string }, to: string, verb: exchange.Verb, after: (() -> ()
     local function done(r: any)
         local mixed = answered[id] == true
         answered[id] = nil
+        if verb == "move" and #r.made == #ask then colours.moved(ask, r.made) end
         look_again()
         if after and not r.cancelled then after() end
         M.arrive(r.made)
@@ -342,6 +347,14 @@ function M.paste(folder: string?)
     end)
 end
 
+-- ---- Colours ----------------------------------------------------------------------------
+
+-- What is selected marked; with nil, no longer.
+function M.colour(list: { string }, key: string?)
+    if g.untracked(browser.in_trash) then return end
+    colours.set(list, key, look_again)
+end
+
 -- ---- Names ------------------------------------------------------------------------------
 
 local WHY = { ["File exists"] = "That name is taken" }
@@ -387,11 +400,17 @@ function M.finish_renaming()
             browser.say { text = words(err) }
             return
         end
+        colours.moved({ r.path }, { path })
         look_again()
         M.arrive { path }
         can_undo("Its name is back", function()
             files:rename(path, r.name, function(was: string?, e: string?)
-                if was then M.arrive { was } else browser.say { text = words(e) } end
+                if was then
+                    colours.moved({ path }, { was })
+                    M.arrive { was }
+                else
+                    browser.say { text = words(e) }
+                end
                 look_again()
             end)
         end)

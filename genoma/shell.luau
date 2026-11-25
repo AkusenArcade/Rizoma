@@ -7,6 +7,7 @@
 local g = require("@genoma")
 local bin = require("core/bin")
 local browser = require("core/browser")
+local colours = require("core/colours")
 local config = require("core/config")
 local exchange = require("core/exchange")
 local operations = require("core/operations")
@@ -27,6 +28,7 @@ local foot_field = require("ui/foot_field")
 local jobs_cell = require("ui/jobs_cell")
 local menu = require("ui/menu")
 local rename = require("ui/rename")
+local swatches = require("ui/swatches")
 local preview = require("ui/preview")
 local view_cell = require("ui/view_cell")
 
@@ -74,7 +76,10 @@ local function filter(text: string)
 end
 local function stop_filtering()
     filtering.value = false
-    browser.filter.value = ""
+    g.batch(function()
+        browser.filter.value = ""
+        browser.only.value = ""
+    end)
 end
 g.watch(function() return filtering.value end, function(on: boolean) if on then looking.value = true end end)
 -- Another folder is another search.
@@ -197,7 +202,7 @@ local function escape()
         floating.value = false
     elseif g.untracked(function() return browser.notice.value end) ~= nil then
         browser.say(nil)
-    elseif g.untracked(function() return filtering.value or browser.filter.value ~= "" end) then
+    elseif g.untracked(function() return filtering.value or browser.looking() end) then
         stop_filtering()
     else
         browser.leave()
@@ -251,6 +256,10 @@ local function key(name: string, text: string?, mods: any)
         elseif name == "Up" then browser.up()
         elseif name == "Down" then open_chosen()
         elseif name == "Home" then browser.go("~")
+        elseif string.match(name, "^[0-9]$") then
+            -- Alt and a figure: that colour; 0, none.
+            local c = colours.list[tonumber(name) :: number]
+            if c or name == "0" then operations.colour(selection.list(), if c then c.key else nil) end
         end
         return
     end
@@ -317,7 +326,10 @@ local function empty_text(): string
     if why then return (WORDS :: any)[why] or `This folder cannot be read: {why}` end
     if browser.dir.count > 0 or browser.dir.loading then return "" end
     if browser.in_trash() and browser.filter.value == "" then return "The trash is empty" end
-    if browser.filter.value ~= "" then return if browser.dir.searching then "Looking in the folders below" else "Nothing by that name" end
+    if browser.looking() then
+        if browser.dir.searching then return "Looking in the folders below" end
+        return if browser.only.value ~= "" then "Nothing of that colour" else "Nothing by that name"
+    end
     if browser.dir.total > 0 then return "Only hidden files" end
     return "Nothing here"
 end
@@ -403,17 +415,24 @@ local header = g.box {
 -- The foot: on the left what does something, then what there is to say; on
 -- the right the cell that says how folders are shown.
 local FIELD = 240
+-- Beside the field, the colours: one pressed shows only what is marked so.
+local COLOURS = swatches.width(#colours.list) + 24
+local function colours_shown(): boolean
+    return filtering.value and not browser.in_trash() and width() > 520
+end
 -- What the cells on the right take.
 local function right_w(): number return if jobs_cell.there.value then H * 2 + 8 else H end
 -- A question needs the room its answers take.
 local function asking(): boolean return browser.notice.value ~= nil and browser.notice.value.act ~= nil and not browser.notice.value.passing end
-local function wordless(): boolean return width() < (if asking() then 1040 else 760) end
+local function wordless(): boolean
+    return width() < (if asking() then 1040 else 760) + (if filtering.value then COLOURS + 60 else 0)
+end
 local function button_w(label: string): number return foot_field.width(label, wordless()) end
 local function field_w(): number
     return math.min(FIELD, math.max(120, width() - right_w() - GAP * 2 - (look.action_height + 8) * 2))
 end
 local function foot_room(): number
-    local used = (if filtering.value then field_w() else button_w("Filter")) + 8 + button_w("Preview") + 8
+    local used = (if filtering.value then field_w() else button_w("Filter")) + 8 + (if colours_shown() then COLOURS + 8 else 0) + button_w("Preview") + 8
         + (if browser.in_trash() then button_w("Put back") + 8 + button_w("Empty")
             elseif naming.value then field_w() else button_w("New folder")) + GAP
     return math.max(120, width() - right_w() - GAP - used)
@@ -437,6 +456,31 @@ local filter_button = foot_field.new {
     on_submit = enter,
     on_stop = stop_filtering,
 }
+local colour_filter = g.capsule {
+    id = "colours",
+    role = "group",
+    name = "Colours",
+    width = function() return if colours_shown() then COLOURS else 0 end,
+    present = colours_shown,
+    height = look.action_height,
+    radius = look.action_height / 2,
+    direction = "row",
+    align = "center",
+    justify = "center",
+    fill = look.glass,
+    rim_top = look.node,
+    rim_bottom = look.node,
+    on_press = function() end,
+    on_click = function() end,
+    swatches.new {
+        id = "only",
+        chosen = function() return browser.only.value end,
+        on_pick = function(key: string?)
+            local was = g.untracked(function() return browser.only.value end)
+            browser.only.value = if key == nil or key == was then "" else key
+        end,
+    },
+}
 local naming_button = foot_field.new {
     id = "new-folder",
     label = "New folder",
@@ -459,7 +503,7 @@ local naming_button = foot_field.new {
 
 local function said(): (string, string)
     local n = selection.count()
-    if n < 2 and browser.filter.value ~= "" and (browser.dir.searching or browser.dir.capped) then
+    if n < 2 and browser.looking() and (browser.dir.searching or browser.dir.capped) then
         local found = browser.dir.count
         return if browser.dir.searching then "Looking in the folders below" else "The first of many", if found > 0 then `{found} found` else ""
     end
@@ -526,6 +570,7 @@ local foot = g.box {
         align = "center",
         gap = 8,
         filter_button,
+        colour_filter,
         ui.action {
             id = "preview-button",
             label = "Preview",
@@ -700,6 +745,11 @@ g.ipc("rizoma", {
         return "ok"
     end,
     find = function(...: string): string filter(table.concat({ ... }, " ")) return "ok" end,
+    only = function(key: string?): string
+        filtering.value = true
+        browser.only.value = key or ""
+        return "ok"
+    end,
     count = function(): string return tostring(g.untracked(function() return browser.dir.count end)) end,
     searching = function(): string return tostring(g.untracked(function() return browser.dir.searching end)) end,
     key = function(name: string, ctrl: string?): string

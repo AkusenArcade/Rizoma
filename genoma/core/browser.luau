@@ -5,6 +5,7 @@ local g = require("@genoma")
 local apps = require("@genoma/apps")
 local mime = require("@genoma/mime")
 local bin = require("core/bin")
+local colours = require("core/colours")
 local config = require("core/config")
 local paths = require("core/paths")
 
@@ -21,6 +22,10 @@ local forward = g.state("rizoma.forward", {} :: { Stop })
 -- changes, and loses it when it goes.
 M.cursor = g.signal(nil :: string?)
 M.filter = g.signal("")
+-- Only what is marked with this colour; "" all.
+M.only = g.signal("")
+-- Whether something is looked for, here and below.
+function M.looking(): boolean return M.filter.value ~= "" or M.only.value ~= "" end
 
 M.here = here
 function M.can_back(): boolean return #back.value > 0 end
@@ -43,6 +48,9 @@ local real = g.directory {
     filter = function() return M.filter.value end,
     -- What is typed is looked for in the folders below too.
     deep = true,
+    attribute = colours.ATTRIBUTE,
+    known = colours.known,
+    only = function() return M.only.value end,
 }
 local thrown = bin.new { filter = function() return M.filter.value end }
 
@@ -97,6 +105,7 @@ M.chosen = function(_: string?, _: How) end
 local function put(stop: Stop)
     g.batch(function()
         M.filter.value = ""
+        M.only.value = ""
         M.cursor.value = stop.cursor
         here.value = stop.path
         M.chosen(stop.cursor, "only")

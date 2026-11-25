@@ -4,7 +4,6 @@
 local g = require("@genoma")
 local browser = require("core/browser")
 local config = require("core/config")
-local operations = require("core/operations")
 local look = require("ui/look")
 local selection = require("core/selection")
 local band = require("ui/band")
@@ -96,7 +95,7 @@ local function cell(entry: () -> any, icon: number, width: number, height: numbe
         return if it then it.within else nil
     end
     local function named(it: any): string
-        return fit(it.name, width - PAD * 2, look.expressive(), if it.within then 1 else LINES)
+        return fit(it.name, width - PAD * 2 - entry_ui.marked(it), look.expressive(), if it.within then 1 else LINES)
     end
     -- The picture and the name take the presses; the rest of the cell is the
     -- folder's own ground, where a rubber band starts.
@@ -125,20 +124,15 @@ local function cell(entry: () -> any, icon: number, width: number, height: numbe
             gap = 6,
             opacity = function() return entry_ui.faded(e.value) end,
             entry_ui.picture(function() return e.value end, icon, true),
-            g.text {
+            entry_ui.name(function() return e.value end, g.text {
                 text = function()
                     local it = e.value
                     return if it then named(it) else ""
                 end,
-                opacity = function()
-                    local it = e.value
-                    local r = operations.renaming.value
-                    return if it and r and r.path == it.path then 0 else 1
-                end,
                 -- No wider than it is: what is beside a short name is ground.
                 max_width = function()
                     local it = e.value
-                    local room = width - PAD * 2
+                    local room = width - PAD * 2 - entry_ui.marked(it)
                     if it == nil then return room end
                     local w = g.text_width { text = it.name, font = look.expressive(), size = look.font_name, weight = look.weight_name }
                     return math.min(room, math.ceil(w) + 2)
@@ -149,7 +143,7 @@ local function cell(entry: () -> any, icon: number, width: number, height: numbe
                 font = look.expressive,
                 size = look.font_name,
                 weight = look.weight_name,
-            },
+            }),
             g.text {
                 present = function() return within() ~= nil end,
                 text = function() return within() or "" end,
@@ -170,7 +164,7 @@ function M.new(width: () -> number, height: () -> number): any
     local icon = g.untracked(function() return config.get("icon") end)
     local cell_w = math.max(icon + 56, 132)
     local line = g.text_height { text = "X", font = g.untracked(look.expressive), size = look.font_name, weight = look.weight_name, width = 100 }
-    local cell_h = math.ceil(icon + 6 + line * LINES + PAD * 2)
+    local cell_h = math.ceil(icon + 6 + line * LINES + 2 + PAD * 2)
     local columns = g.computed(function(): number
         return math.max(1, math.floor((width() + GAP) / (cell_w + GAP)))
     end)

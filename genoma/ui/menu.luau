@@ -3,7 +3,9 @@
 -- where it was pressed. A row with more of its own opens it in place.
 local g = require("@genoma")
 local look = require("ui/look")
+local colours = require("core/colours")
 local scroll_mark = require("ui/scroll_mark")
+local swatches = require("ui/swatches")
 
 local M = {}
 
@@ -17,10 +19,12 @@ export type Item = {
     icon: string?,
     -- What it opens, in place.
     more: { Item }?,
+    -- Instead of words, the colours: the one that is, and what picks one.
+    colours: { chosen: string?, pick: (key: string?) -> () }?,
 }
-type Line = { kind: "item" | "line", item: Item?, key: string, inner: boolean }
+type Line = { kind: "item" | "line" | "colours", item: Item?, key: string, inner: boolean }
 
-local ROW, RULE, PAD, MIN, MAX = 32, 11, 8, 196, 320
+local ROW, RULE, SWATCHES, PAD, MIN, MAX = 32, 11, 36, 8, 220, 320
 
 local shown = g.signal(nil :: { items: { Item | string }, x: number, y: number, at: number }?)
 local grown = g.signal(false)
@@ -68,7 +72,7 @@ local lines = g.computed(function(): { Line }
         else
             local item: Item = it
             local key = `{s.at}:{i}`
-            table.insert(out, { kind = "item", item = item, key = key, inner = false })
+            table.insert(out, { kind = if item.colours then "colours" else "item", item = item, key = key, inner = false })
             if item.more and opened.value == key then
                 for k, m in item.more do
                     table.insert(out, { kind = "item", item = m, key = `{key}:{k}`, inner = true })
@@ -79,11 +83,20 @@ local lines = g.computed(function(): { Line }
     return out
 end)
 
-local function usable(l: Line): boolean return l.kind == "item" and (l.item :: Item).off ~= true end
+-- The colour the keys are on, in their row.
+local swatch = g.signal(1)
+
+local function usable(l: Line): boolean return l.kind ~= "line" and (l.item :: Item).off ~= true end
 
 local function press(l: Line)
     if not usable(l) then return end
     local item = l.item :: Item
+    if item.colours then
+        local c = colours.list[g.untracked(function() return swatch.value end)]
+        M.close()
+        item.colours.pick(if c then c.key else nil)
+        return
+    end
     if item.more then
         opened.value = if g.untracked(function() return opened.value end) == l.key then nil else l.key
         return
@@ -130,8 +143,12 @@ function M.key(name: string)
     elseif name == "Return" or name == "KP_Enter" or name == "space" then
         local l = current()
         if l then press(l) end
-    elseif name == "Right" then
+    elseif name == "Right" or name == "Left" and current() and (current() :: Line).kind == "colours" then
         local l = current()
+        if l and l.kind == "colours" then
+            swatch.value = math.clamp(g.untracked(function() return swatch.value end) + (if name == "Right" then 1 else -1), 1, swatches.COUNT)
+            return
+        end
         if l and usable(l) and (l.item :: Item).more and g.untracked(function() return opened.value end) ~= l.key then press(l) end
     elseif name == "Left" then
         local key = g.untracked(function() return opened.value end)
@@ -149,6 +166,7 @@ local width = g.computed(function(): number
     local w = MIN
     local s = shown.value
     local function add(it: Item, inner: boolean)
+        if it.colours then return end
         local need = wide(it.text) + PAD * 2 + 24 + (if inner then 12 else 0) + (if it.icon then 26 else 0) + (if it.more then 28 else 0)
         if it.keys then need += 24 + g.text_width { text = it.keys, font = look.technical(), size = look.font_meta } end
         w = math.max(w, math.ceil(need))
@@ -164,7 +182,7 @@ local width = g.computed(function(): number
 end)
 local content_h = g.computed(function(): number
     local h = PAD * 2
-    for _, l in lines.value do h += if l.kind == "line" then RULE else ROW end
+    for _, l in lines.value do h += if l.kind == "line" then RULE elseif l.kind == "colours" then SWATCHES else ROW end
     return h
 end)
 
@@ -187,6 +205,26 @@ local function row(line: () -> Line, _: any): any
         }
     end
     local function item(): Item return line().item or { text = "" } end
+    if first.kind == "colours" then
+        local c = (first.item :: Item).colours :: any
+        return g.box {
+            height = SWATCHES,
+            direction = "row",
+            align = "center",
+            justify = "center",
+            on_hover = function(o: boolean) if o then on.value = nil end end,
+            swatches.new {
+                id = "colour",
+                none = true,
+                chosen = function() return c.chosen end,
+                hot = function() return if on.value == line().key then swatch.value else 0 end,
+                on_pick = function(key: string?)
+                    M.close()
+                    c.pick(key)
+                end,
+            },
+        }
+    end
     local function lit(): boolean return on.value == line().key end
     local function off(): boolean return item().off == true end
     local function open(): boolean return opened.value == line().key end

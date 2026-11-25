@@ -5,7 +5,9 @@ local g = require("@genoma")
 local thumbnails = require("@genoma/thumbnails")
 local browser = require("core/browser")
 local actions = require("ui/actions")
+local colours = require("core/colours")
 local exchange = require("core/exchange")
+local operations = require("core/operations")
 local icons = require("core/icons")
 local selection = require("core/selection")
 local look = require("ui/look")
@@ -17,6 +19,41 @@ local M = {}
 local pressed = g.signal("")
 M.pressed = pressed
 local function pressed_path(): string return g.untracked(function() return pressed.value end) end
+
+-- The colour an entry is marked with, or nil.
+function M.mark(e: any): string?
+    local key = colours.of(e)
+    return if key then colours.hex(key, look.is_dark()) else nil
+end
+-- What its name gives up to the capsule a colour puts it in.
+M.MARKED = 18
+function M.marked(e: any): number return if colours.of(e) then M.MARKED else 0 end
+
+-- An entry's name, in a capsule of its colour when it is marked.
+function M.name(entry: () -> any, text: any): any
+    return g.capsule {
+        padding_x = function() return M.marked(entry()) / 2 end,
+        padding_y = 1,
+        radius = 11,
+        fill = function()
+            local m = M.mark(entry())
+            return if m then g.colour.alpha(m, 0.2) else look.CLEAR
+        end,
+        rim_top = function() return M.mark(entry()) or look.CLEAR end,
+        rim_bottom = function()
+            local m = M.mark(entry())
+            return if m then g.colour.alpha(m, 0.5) else look.CLEAR
+        end,
+        -- Where its name is being written there is another shape.
+        opacity = function()
+            local it = entry()
+            local r = operations.renaming.value
+            return if it and r and r.path == it.path then 0 else 1
+        end,
+        transition = { fill = "ui_change", rim_top = "ui_change", rim_bottom = "ui_change" },
+        text,
+    }
+end
 
 -- `entry()` may be nil while its row goes.
 function M.picture(entry: () -> any, size: number, pictured: boolean): any

@@ -13,6 +13,7 @@ local paths = require("core/paths")
 local selection = require("core/selection")
 local look = require("ui/look")
 local ui = require("ui/controls")
+local entry_ui = require("ui/entry")
 
 local M = {}
 
@@ -332,14 +333,17 @@ local function page(e: any, width: number, height: () -> number): any
             direction = "column",
             align = "stretch",
             gap = 2,
-            g.text {
-                text = if e.own and e.path == paths.home then "Home" else e.name,
-                max_width = inner,
-                wrap = true,
-                color = look.text,
-                font = look.expressive,
-                size = look.font_name,
-                weight = 600,
+            g.box {
+                direction = "row",
+                entry_ui.name(function() return e end, g.text {
+                    text = if e.own and e.path == paths.home then "Home" else e.name,
+                    max_width = inner - entry_ui.marked(e),
+                    wrap = true,
+                    color = look.text,
+                    font = look.expressive,
+                    size = look.font_name,
+                    weight = 600,
+                }),
             },
             g.text {
                 text = if e.broken then "Link to nothing" elseif e.many then M.said(e.sum) elseif e.path == paths.TRASH then "" else apps_mime:description(e.mime),
@@ -437,7 +441,7 @@ function M.new(t: { [string]: any }): any
                 justify = "start",
                 width = t.width,
                 height = t.height,
-                key = function(e) return `{e.path}:{e.modified}:{e.mime}:{g.untracked(t.width)}` end,
+                key = function(e) return `{e.path}:{e.modified}:{e.mime}:{e.attribute or ""}:{g.untracked(t.width)}` end,
                 row = function(e, _) return page(g.untracked(e), g.untracked(t.width), t.height) end,
             },
         },
