@@ -10,10 +10,18 @@ local M = {}
 -- `at`: which of its panes has the keys.
 export type Tab = { id: number, panes: any, at: any }
 
-local START = paths.expand(g.env("RIZOMA_FOLDER") or "~")
+-- What it was started with (core/desktop), a tab each; else the home folder.
+local desktop = require("core/desktop")
+local START: { string } = {}
+if desktop.mode == "open" then
+    for _, p in desktop.asked do table.insert(START, p) end
+end
+if #START == 0 then table.insert(START, paths.expand(g.env("RIZOMA_FOLDER") or "~")) end
+local STARTED: { { string } } = {}
+for _, p in START do table.insert(STARTED, { p }) end
 
 -- Kept through a reload while Rizoma is written: only where they are.
-local kept = g.state("rizoma.tabs", { tabs = { { START } }, at = { 1 }, tab = 1 } :: any)
+local kept = g.state("rizoma.tabs", { tabs = STARTED, at = {}, tab = 1 } :: any)
 
 local count = 0
 local function made(list: { string }, at: number): Tab
@@ -27,7 +35,7 @@ local first: { Tab } = {}
 do
     local was = g.untracked(function() return kept.value end)
     for i, list in was.tabs do table.insert(first, made(list, was.at[i] or 1)) end
-    if #first == 0 then table.insert(first, made({ START }, 1)) end
+    if #first == 0 then table.insert(first, made({ START[1] }, 1)) end
     M.tabs = g.signal(first)
     M.tab = g.signal(first[math.clamp(was.tab, 1, #first)])
 end

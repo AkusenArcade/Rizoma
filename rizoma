@@ -1,0 +1,29 @@
+#!/bin/sh
+# Opens Rizoma: the Genoma app in RIZOMA_DIR (the package's by default).
+#
+#   rizoma [folder or file …]     each in a tab; a file, its folder
+#   rizoma --select <file> …      the folders around them, standing on them
+#   rizoma --properties <file> …  and what there is to know of them
+#   rizoma --service              waits to be asked over D-Bus (FileManager1)
+#
+# Paths or file:// URIs. GENOMA names another genoma to run it with.
+dir="${RIZOMA_DIR:-/usr/share/rizoma}"
+mode=open
+case "$1" in
+    --select) mode=select; shift ;;
+    --properties) mode=properties; shift ;;
+    --service) mode=service; shift ;;
+esac
+what=
+for a in "$@"; do
+    case "$a" in
+        /*|\~*|*://*|trash:*) ;;
+        *) a="$PWD/$a" ;;
+    esac
+    what="$what$a
+"
+done
+self=$(command -v -- "$0" || printf %s "$0")
+# An IPC socket of its own: it meets neither the shell nor other Genoma apps.
+GENOMA_IPC="${RIZOMA_IPC:-rizoma}" RIZOMA_MODE="$mode" RIZOMA_OPEN="$what" RIZOMA_SELF="$self" RIZOMA_GENOMA="$GENOMA" \
+    exec "${GENOMA:-genoma}" "$dir"

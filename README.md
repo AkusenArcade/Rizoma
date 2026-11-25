@@ -11,7 +11,11 @@ Status: it browses, searches, previews, copies, moves, renames, makes folders
 and has the trash. See [`docs/plan.md`](docs/plan.md).
 
 ```
-genoma genoma            # from this folder; RIZOMA_FOLDER: where it opens
+./install.sh             # for this user; --here runs it from this checkout
+rizoma [folder …]        # each in a tab
 ```
+
+To open folders with it everywhere, turn DEFAULT on in the cell of the button at
+the foot's right.
 
 It needs a Genoma newer than 0.1.24.

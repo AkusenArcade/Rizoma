@@ -3,6 +3,7 @@
 -- buds from it and opens above it.
 local g = require("@genoma")
 local config = require("core/config")
+local desktop = require("core/desktop")
 local look = require("ui/look")
 local ui = require("ui/controls")
 local foot_cell = require("ui/foot_cell")
@@ -83,6 +84,12 @@ function M.new(area: () -> { w: number, h: number }): any
                 config.set("icon", config.ICON_MIN + math.floor(v * SPAN / config.ICON_STEP + 0.5) * config.ICON_STEP)
             end,
         }, function() return config.get("view") == "grid" end),
+        row("Default", ui.switch {
+            id = "switch-default",
+            name = "The default file manager",
+            on = desktop.is_default,
+            on_toggle = desktop.set_default,
+        }, desktop.can_be_default),
     }
 
     return foot_cell.new {

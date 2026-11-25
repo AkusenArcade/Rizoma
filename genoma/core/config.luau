@@ -20,6 +20,8 @@ M.defaults = {
     places = true,
     -- The preview pane, kept open where there is room.
     preview = false,
+    -- What opened folders before Rizoma did.
+    before = "",
 } :: { [string]: any }
 
 local CHOICES: { [string]: { string } } = {

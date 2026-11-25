@@ -1,6 +1,6 @@
 # Rizoma — plan
 
-Status: phases 1 to 7 built, 2026-11-25 (`genoma/`). Pace: slow, no deadline.
+Status: phases 1 to 8 built, 2026-11-25 (`genoma/`). Pace: slow, no deadline.
 
 ## 1. What it is
 
@@ -236,6 +236,12 @@ As built (2026-11-25). No title bar, as every Genoma app:
   moves what is selected to the other's folder, Shift+F6 copies. Each has its
   own way back, selection, filter and place in the list (`core/pane`;
   `core/browser` and `core/selection` speak of the one that has the keys).
+- **Other programs** ask it to show things over D-Bus (`org.freedesktop.
+  FileManager1`, `core/desktop`): the bus starts `rizoma --service`, which has no
+  window until it is asked and goes if nobody does; asked again while that window
+  is somebody's, it opens another. A window opened by hand takes nobody's name.
+- **The icon** (`assets/rizoma.svg`; Akusen, 2026-11-25): a folder that sprouts, in
+  the round capsule of every app's, in Bioma's default colours.
 - Closed while something is being done to files, it is asked first.
 - **Undo** (Ctrl+Z, and beside the notice of what went elsewhere): the last
   thing done, while it can be put back whole. Moved: moved back; copied or made:
@@ -297,9 +303,10 @@ text it is.
    then two panes, then tabs. Done, 2026-11-25.
 7. **Comfort**: colours, bookmarks written, search (the filter's), properties,
    drives. Done, 2026-11-25.
-8. **Desktop integration**: `FileManager1`, Rizoma as the default for
-   `inode/directory` (today it is Nautilus), Bioma's launcher reveal and
-   downloads cell pointing to it.
+8. **Desktop integration**: its launcher (`rizoma`), desktop file and icon;
+   `FileManager1`; the default for `inode/directory` by a switch in the view's
+   cell (DEFAULT), which puts back what did before. Bioma's "show in folder"
+   asks whoever answers: nothing to change there. Done, 2026-11-25.
 9. **Packaging**: AUR, `arch=any`, depends on `genoma`.
 
 Verification: `genoma snapshot --mock` with a fake folder for the views;

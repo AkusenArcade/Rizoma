@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Rizoma
+GenericName=File manager
+Comment=Browse and organise files, in Bioma's style
+Exec=rizoma %U
+Icon=dev.akusen.rizoma
+Terminal=false
+Categories=System;FileTools;FileManager;
+Keywords=files;folders;manager;explore;disk;trash;
+MimeType=inode/directory;
+StartupWMClass=dev.akusen.rizoma
+StartupNotify=true

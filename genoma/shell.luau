@@ -9,6 +9,7 @@ local bin = require("core/bin")
 local browser = require("core/browser")
 local colours = require("core/colours")
 local config = require("core/config")
+local desktop = require("core/desktop")
 local exchange = require("core/exchange")
 local operations = require("core/operations")
 local panes = require("core/panes")
@@ -912,6 +913,33 @@ local outside = g.box {
     on_click = function() floating.value = false end,
 }
 
+-- What is asked to be shown: the folders, or what is in them chosen, each
+-- folder a tab; the first one here.
+local function show_here(mode: string, list: { string })
+    local order: { string } = {}
+    local by: { [string]: { string } } = {}
+    for _, p in list do
+        local at = if mode == "open" then p else (paths.parent(p) or "/")
+        if by[at] == nil then
+            by[at] = {}
+            table.insert(order, at)
+        end
+        table.insert(by[at], p)
+    end
+    for i, at in order do
+        if i > 1 then panes.new_tab(at) else browser.go(at) end
+        if mode ~= "open" then operations.arrive(by[at]) end
+    end
+    if mode == "properties" then
+        -- Once the folder is there to grow from.
+        g.after(0.4, function() actions.properties(list) end)
+    end
+end
+desktop.show = show_here
+if #desktop.asked > 0 and (desktop.mode == "select" or desktop.mode == "properties") then
+    g.after(0, function() show_here(desktop.mode, desktop.asked) end)
+end
+
 -- ---- From outside -------------------------------------------------------------------
 
 g.ipc("rizoma", {
@@ -981,6 +1009,7 @@ local window = g.window {
     height = 700,
     min = { 420, 320 },
     on_close = quit,
+    present = function() return desktop.shown.value end,
     g.capsule {
         grow = 1,
         radius = 0,
