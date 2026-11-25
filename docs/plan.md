@@ -1,7 +1,6 @@
 # Rizoma — plan
 
-Status: phase 1 built, 2026-11-25 (`genoma/`); phase 2 in part (types and
-thumbnails; the preview pane is not). Pace: slow, no deadline.
+Status: phases 1 and 2 built, 2026-11-25 (`genoma/`). Pace: slow, no deadline.
 
 ## 1. What it is
 
@@ -120,13 +119,20 @@ As built (2026-11-25). No title bar, as every Genoma app:
   retracts. The current one, pressed, becomes a field (Ctrl+L); a deep path
   keeps its start and as many of its last steps as fit.
 - **Places**: the user's folders, the GTK bookmarks (read, not written yet),
-  the computer. Pinned beside the folder at 760 wide and more; under that, or
+  the computer; in Orbitron, as a menu is. Pinned beside the folder at 800
+  wide and more; under that, or
   put away (F9), a button they grow from and float over the folder.
 - **View**: a button at the foot's right, and the cell that grows from it:
   grid or list, order, reversed, folders first, hidden files, places, size.
 - **Foot**: nothing at rest. What is stood on (the grid only: the list says it
   in its columns), a notice, the filter typed over the folder.
-- The preview pane comes with the rest of phase 2.
+- **Preview** (space, or the view cell): a pane that grows from the entry stood
+  on and goes back to it. Pinned beside the folder where both have room (660),
+  floating on the side the entry is not where they do not. Pictures (moving
+  ones move), the first page or frame of what has a thumbnailer, the head of a
+  text, a folder's first names; below, name, type, size, date, what opens it.
+  With nothing stood on, the folder's own. Read 0.12 s after the last step, so
+  walking with the arrows reads nothing on the way.
 
 Responsive by the window's size: the sidebar collapses to a button, the list
 loses its type, then its date, then its size; the grid's columns are computed
@@ -135,7 +141,8 @@ a drag past a threshold moves, a tap selects.
 
 Keys: arrows, Home/End, Page Up/Down, Enter, BackSpace and Alt+↑ (up),
 Alt+←/→, Alt+Home, Ctrl+H, Ctrl+L, Ctrl+F or just typing (filter), Ctrl+1/2
-(grid, list), F5 or Ctrl+R, F9 (places), Escape. With their phases: Ctrl+C/X/V,
+(grid, list), F5 or Ctrl+R, F9 (places),
+space (preview), Escape. With their phases: Ctrl+C/X/V,
 F2, Delete (trash), Shift+Delete (confirmed), Ctrl+T/W, Ctrl+Shift+N.
 
 What runs a program (executables, `.desktop`, AppImage, Windows programs,

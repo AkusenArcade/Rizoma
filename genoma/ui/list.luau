@@ -12,7 +12,7 @@ local entry_ui = require("ui/entry")
 
 local M = {}
 
-local ROW, PAD, GAP, HEAD = look.row_height + 2, 10, 14, 30
+local ROW, PAD, GAP, HEAD = 38, 10, 14, 32
 local SIZE_W, MODIFIED_W, TYPE_W = 84, 150, 170
 
 local function wide(width: number): (boolean, boolean, boolean)
@@ -20,7 +20,7 @@ local function wide(width: number): (boolean, boolean, boolean)
 end
 local function name_room(width: number): number
     local size, modified, kind = wide(width)
-    local room = width - PAD * 2 - 24 - 10
+    local room = width - PAD * 2 - 28 - 10
     if size then room -= SIZE_W + GAP end
     if modified then room -= MODIFIED_W + GAP end
     if kind then room -= TYPE_W + GAP end
@@ -122,19 +122,20 @@ local function row(width: () -> number): (() -> number, any) -> any
             on_press = function() end,
             on_click = entry_ui.pressed(function() return e.value end),
             g.box {
-                width = function() return name_room(width()) + 34 end,
+                width = function() return name_room(width()) + 38 end,
                 direction = "row",
                 align = "center",
                 gap = 10,
                 opacity = function() return entry_ui.faded(e.value) end,
-                entry_ui.picture(function() return e.value end, 24, false),
+                entry_ui.picture(function() return e.value end, 28, false),
                 g.text {
                     text = function() return if e.value then e.value.name else "" end,
                     max_width = function() return name_room(width()) end,
                     ellipsize = "middle",
                     color = look.text,
                     font = look.expressive,
-                    size = look.font_secondary,
+                    size = look.font_name,
+                    weight = look.weight_name,
                 },
             },
             figure(function()
@@ -158,11 +159,13 @@ local function row(width: () -> number): (() -> number, any) -> any
                 ellipsize = "end",
                 color = look.text_muted,
                 font = look.expressive,
-                size = look.font_secondary,
+                size = look.font_text,
             },
         }
     end
 end
+
+M._scrolled = function(_: number) end
 
 function M.new(width: () -> number, height: () -> number): any
     return g.box {
@@ -176,7 +179,7 @@ function M.new(width: () -> number, height: () -> number): any
             direction = "row",
             align = "center",
             gap = GAP,
-            title("name", "Name", function() return name_room(width()) + 34 end, "start"),
+            title("name", "Name", function() return name_room(width()) + 38 end, "start"),
             title("size", "Size", function() return SIZE_W end, "end", function() return (wide(width())) end),
             title("modified", "Modified", function() return MODIFIED_W end, "start", function()
                 local _, modified = wide(width())
@@ -192,6 +195,7 @@ function M.new(width: () -> number, height: () -> number): any
             width = width,
             height = function() return math.max(ROW, height() - HEAD) end,
             row_height = ROW,
+            on_scroll = function(offset: number) M._scrolled(offset) end,
             count = function() return browser.dir.count end,
             item = function(i: number) return i end,
             key = function(i: number) return i end,
@@ -201,6 +205,13 @@ function M.new(width: () -> number, height: () -> number): any
     }
 end
 
+-- Where an entry is drawn, from the view's corner.
+local scrolled = g.signal(0)
+function M.rect(index: number, width: number): { x: number, y: number, w: number, h: number }
+    return { x = 0, y = HEAD + (index - 1) * ROW - scrolled.value, w = width, h = ROW }
+end
+
+M._scrolled = function(offset: number) scrolled.value = offset end
 M.row_height = ROW
 M.head = HEAD
 

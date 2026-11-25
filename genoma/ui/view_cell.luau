@@ -94,6 +94,7 @@ function M.new(area: () -> { w: number, h: number }): any
         toggle("Folders first", "folders_first"),
         toggle("Hidden files", "hidden"),
         toggle("Places", "places"),
+        toggle("Preview", "preview"),
         row("Size", ui.slider {
             id = "icon",
             name = "Icon size",

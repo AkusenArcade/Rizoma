@@ -9,8 +9,8 @@ local ui = require("ui/controls")
 
 local M = {}
 
-M.WIDTH = 196
-local PAD, BUTTON = 8, look.cell_height
+M.WIDTH = 240
+local PAD, BUTTON, ROW, ICON = 8, look.cell_height, 40, 22
 
 local function row(place: () -> any): any
     local over = g.signal(false)
@@ -20,9 +20,9 @@ local function row(place: () -> any): any
     end
     return g.capsule {
         role = "button",
-        height = look.row_height + 2,
-        padding_x = 10,
-        gap = 10,
+        height = ROW,
+        padding_x = 12,
+        gap = 12,
         direction = "row",
         align = "center",
         justify = "start",
@@ -39,15 +39,18 @@ local function row(place: () -> any): any
         on_click = function(button: number)
             if button == 272 then M.chose(g.untracked(place).path) end
         end,
-        ui.glyph(g.untracked(place).glyph, 18, here, look.text_muted),
+        ui.glyph(g.untracked(place).glyph, ICON, here, look.text_muted),
         g.text {
+            -- A menu's words, so the technical voice (Akusen, 2026-11-25); the
+            -- names keep the case they were given.
             text = function() return place().name end,
-            max_width = M.WIDTH - PAD * 2 - 20 - 28,
+            max_width = M.WIDTH - PAD * 2 - 24 - 12 - ICON,
             ellipsize = "end",
             color = look.text,
-            font = look.expressive,
-            size = look.font_secondary,
-            weight = function() return if here() then 600 else 400 end,
+            font = look.technical,
+            size = look.font_menu,
+            weight = function() return if here() then 700 else 500 end,
+            tracking = 0.02,
         },
     }
 end

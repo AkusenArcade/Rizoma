@@ -85,6 +85,13 @@ M.margin_edge = 12
 M.gap = 12
 M.thread = 1.3
 M.font_label = 15
+-- The names of files: 15, chosen beside Nautilus (Akusen, 2026-11-25).
+-- Spectral's letters are low (an x-height of 0.45 against 0.55), so at the
+-- same size it is read smaller; a weight more, so it is read as dark.
+M.font_name = 15
+M.weight_name = 500
+M.font_text = 14
+M.font_menu = 13
 M.font_secondary = 13
 M.font_meta = 11
 M.label_tracking = 0.06
@@ -99,6 +106,8 @@ g.timing {
     shoot_close = { duration = 0.15, curve = { 0.5, 0, 0.9, 0.5 } },
     content_in = { duration = 0.12, delay = 0.12, curve = { 0.2, 0, 0, 1 } },
     content_out = { duration = 0.06, curve = { 0.4, 0, 1, 1 } },
+    -- Put where it is to grow from, before it is seen.
+    placed = { duration = 0, curve = { 0, 0, 1, 1 } },
     folder_in = { duration = 0.16, curve = { 0.2, 0, 0, 1 } },
 }
 M.CLOSE = 0.16

@@ -9,7 +9,7 @@ local entry_ui = require("ui/entry")
 
 local M = {}
 
-local GAP, PAD, LINE, LINES = 8, 8, 17, 2
+local GAP, PAD, LINES = 8, 8, 2
 
 -- A name on two lines at most: longer, it loses its middle, so it keeps
 -- how it begins and its extension. Measured once for each name and width.
@@ -20,8 +20,8 @@ local function fit(name: string, width: number, font: string): string
     local hit = fitted[key]
     if hit then return hit end
     local function fits(text: string): boolean
-        local h = g.text_height { text = text, font = font, size = look.font_secondary, width = width }
-        local one = g.text_height { text = "X", font = font, size = look.font_secondary, width = width }
+        local h = g.text_height { text = text, font = font, size = look.font_name, weight = look.weight_name, width = width }
+        local one = g.text_height { text = "X", font = font, size = look.font_name, weight = look.weight_name, width = width }
         return h <= one * LINES + 1
     end
     local out = name
@@ -49,6 +49,15 @@ M._fit = fit
 
 M.columns = g.signal(1)
 M.rows_in_view = g.signal(1)
+
+-- Where an entry is drawn, from the view's corner, whether in view or not.
+local place = g.signal({ pitch = 1, cell_w = 0, cell_h = 0, gap = 0 })
+local scrolled = g.signal(0)
+function M.rect(index: number): { x: number, y: number, w: number, h: number }
+    local c, p = M.columns.value, place.value
+    local row, col = math.floor((index - 1) / c), (index - 1) % c
+    return { x = col * (p.cell_w + p.gap), y = row * p.pitch - scrolled.value, w = p.cell_w, h = p.cell_h }
+end
 
 local function cell(entry: () -> any, icon: number, width: number, height: number): any
     local over = g.signal(false)
@@ -94,7 +103,8 @@ local function cell(entry: () -> any, icon: number, width: number, height: numbe
                 text_align = "center",
                 color = look.text,
                 font = look.expressive,
-                size = look.font_secondary,
+                size = look.font_name,
+                weight = look.weight_name,
             },
         },
     }
@@ -104,8 +114,9 @@ end
 -- foot, so the last row can be scrolled clear of it.
 function M.new(width: () -> number, height: () -> number): any
     local icon = g.untracked(function() return config.get("icon") end)
-    local cell_w = math.max(icon + 44, 112)
-    local cell_h = icon + 6 + LINE * LINES + PAD * 2
+    local cell_w = math.max(icon + 56, 132)
+    local line = g.text_height { text = "X", font = g.untracked(look.expressive), size = look.font_name, weight = look.weight_name, width = 100 }
+    local cell_h = math.ceil(icon + 6 + line * LINES + PAD * 2)
     local columns = g.computed(function(): number
         return math.max(1, math.floor((width() + GAP) / (cell_w + GAP)))
     end)
@@ -115,6 +126,7 @@ function M.new(width: () -> number, height: () -> number): any
         return if c > 1 then math.floor((width() - c * cell_w) / (c - 1)) else GAP
     end
     g.effect(function()
+        place.value = { pitch = cell_h + GAP, cell_w = cell_w, cell_h = cell_h, gap = gap() }
         M.columns.value = columns.value
         M.rows_in_view.value = math.max(1, math.floor(height() / (cell_h + GAP)))
     end)
@@ -124,6 +136,7 @@ function M.new(width: () -> number, height: () -> number): any
         height = height,
         gap = GAP,
         row_height = cell_h,
+        on_scroll = function(offset: number) scrolled.value = offset end,
         count = function() return math.ceil(browser.dir.count / columns.value) end,
         item = function(i: number) return i end,
         -- Another number across is another row.

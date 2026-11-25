@@ -16,11 +16,12 @@ local path_bar = require("ui/path_bar")
 local sidebar = require("ui/sidebar")
 local grid = require("ui/grid")
 local list = require("ui/list")
+local preview = require("ui/preview")
 local view_cell = require("ui/view_cell")
 
 local E, GAP, H = look.margin_edge, look.gap, look.cell_height
 -- Narrower than this, the places float over the folder.
-local WIDE = 760
+local WIDE = 800
 
 local area = g.signal({ w = 1100, h = 700 })
 local floating = g.signal(false)
@@ -28,12 +29,22 @@ local filtering = g.signal(false)
 
 local function pinned(): boolean return config.get("places") and area.value.w >= WIDE end
 local function left(): number return if pinned() then E + sidebar.WIDTH + GAP else E end
-local function width(): number return math.max(120, area.value.w - left() - E) end
+-- What the folder and its preview share; with less than this, the preview
+-- floats over the folder.
+local SHARED = 660
+local function across_all(): number return area.value.w - left() - E end
+local peeking = g.signal(false)
+local function roomy(): boolean return across_all() >= SHARED end
+local function preview_pinned(): boolean return config.get("preview") and roomy() end
+local function width(): number
+    return math.max(120, across_all() - (if preview_pinned() then preview.WIDTH + GAP else 0))
+end
 local top = E + H + GAP
 -- The folder ends above what floats at the foot: nothing is read through it.
 local function height(): number return math.max(80, area.value.h - top - E - H - 8) end
 
 g.watch(pinned, function(on: boolean) if on then floating.value = false end end)
+g.watch(preview_pinned, function(on: boolean) if on then peeking.value = false end end)
 
 sidebar.chose = function(path: string)
     floating.value = false
@@ -99,9 +110,19 @@ local function toggle_places()
     end
 end
 
+local function toggle_preview()
+    if g.untracked(roomy) then
+        toggle("preview")
+    else
+        peeking.value = not g.untracked(function() return peeking.value end)
+    end
+end
+
 local function escape()
     if g.untracked(function() return view_cell.open.value end) then
         view_cell.open.value = false
+    elseif g.untracked(function() return peeking.value end) then
+        peeking.value = false
     elseif g.untracked(function() return floating.value end) then
         floating.value = false
     elseif g.untracked(function() return browser.notice.value end) ~= nil then
@@ -154,6 +175,7 @@ local function key(name: string, text: string?, mods: any)
     elseif name == "Escape" then escape()
     elseif name == "F5" then browser.dir:reload()
     elseif name == "F9" then toggle_places()
+    elseif name == "space" then toggle_preview()
     elseif name == "XF86Back" then browser.back()
     elseif name == "XF86Forward" then browser.forward()
     elseif text and #text > 0 and string.match(text, "^[^%c ]") then
@@ -274,7 +296,8 @@ local function foot_room(): number return math.max(160, width() - H - GAP) end
 
 local function said(): (string, string)
     local e = browser.selected()
-    if e == nil or config.get("view") ~= "grid" then return "", "" end
+    -- The list says it in its columns, the preview in its own words.
+    if e == nil or config.get("view") ~= "grid" or preview_pinned() or peeking.value then return "", "" end
     local kind = mime:description(e.mime)
     if e.dir then return e.name, format.moment(e.modified) end
     return e.name .. " — " .. kind, `{format.size(e.size)}   {format.moment(e.modified)}`
@@ -326,7 +349,7 @@ local foot = g.box {
         g.field {
             id = "filter-field",
             grow = 1,
-            size = look.font_secondary,
+            size = look.font_label,
             font = look.expressive,
             color = look.text,
             caret_color = look.primary,
@@ -346,7 +369,7 @@ local foot = g.box {
             ellipsize = "middle",
             color = look.text,
             font = look.expressive,
-            size = look.font_secondary,
+            size = look.font_label,
         },
         g.box {
             present = function() return browser.notice.value ~= nil and browser.notice.value.act ~= nil end,
@@ -376,7 +399,7 @@ local foot = g.box {
             ellipsize = "middle",
             color = look.text,
             font = look.expressive,
-            size = look.font_secondary,
+            size = look.font_label,
         },
         g.text {
             text = function()
@@ -389,6 +412,31 @@ local foot = g.box {
             tabular = true,
         }
     ),
+}
+
+-- Where what is stood on is drawn in the window, while it is in view.
+local function stood_at(): any
+    local i = browser.index.value
+    if i == nil then return nil end
+    local r = if config.get("view") == "grid" then grid.rect(i) else list.rect(i, width())
+    if r.y + r.h < 0 or r.y > height() then return nil end
+    return { x = left() + r.x, y = top + r.y, w = r.w, h = r.h }
+end
+
+local preview_pane = preview.new {
+    pinned = preview_pinned,
+    open = function() return peeking.value end,
+    width = function() return math.min(preview.WIDTH, area.value.w - E * 2) end,
+    -- Floating, on the side the entry is not: what is stood on stays seen.
+    x = function()
+        local right = area.value.w - E - math.min(preview.WIDTH, area.value.w - E * 2)
+        if preview_pinned() then return right end
+        local o = stood_at()
+        return if o and o.x + o.w / 2 > area.value.w / 2 then E else right
+    end,
+    y = function() return top end,
+    height = height,
+    origin = stood_at,
 }
 
 -- A press beside the floating places puts them away.
@@ -409,6 +457,13 @@ g.ipc("rizoma", {
     open = function(...: string): string
         local path = table.concat({ ... }, " ")
         browser.go(if path == "" then "~" else path)
+        return "ok"
+    end,
+    -- The folder around a path, standing on it.
+    select = function(...: string): string
+        local path = paths.expand(table.concat({ ... }, " "))
+        browser.go(paths.parent(path) or "/", path)
+        browser.cursor.value = path
         return "ok"
     end,
     here = function(): string return g.untracked(function() return browser.here.value end) end,
@@ -440,7 +495,9 @@ return g.window {
         grow = 1,
         radius = 0,
         blur = true,
-        fill = function() return g.colour.alpha(look.background(), 0.88) end,
+        -- Opaque: how much of the desktop shows through a window is the
+        -- compositor's to say, as for any other.
+        fill = look.background,
         rim_top = look.CLEAR,
         rim_bottom = look.CLEAR,
         catch = true,
@@ -448,6 +505,7 @@ return g.window {
         on_size = function(w: number, h: number) area.value = { w = w, h = h } end,
         content,
         header,
+        preview_pane,
         foot,
         outside,
         sidebar.new {

@@ -18,6 +18,8 @@ M.defaults = {
     icon = 80,
     -- The places, kept open beside the folder where there is room.
     places = true,
+    -- The preview pane, kept open where there is room.
+    preview = false,
 } :: { [string]: any }
 
 local CHOICES: { [string]: { string } } = {
