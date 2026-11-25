@@ -1,6 +1,6 @@
 # Rizoma — plan
 
-Status: phases 1 to 4 built, 2026-11-25 (`genoma/`). Pace: slow, no deadline.
+Status: phases 1 to 5 built, 2026-11-25 (`genoma/`). Pace: slow, no deadline.
 
 ## 1. What it is
 
@@ -192,6 +192,14 @@ As built (2026-11-25). No title bar, as every Genoma app:
   something takes half a second, and the cell that grows from it: how far, how
   fast, pause, stop. A question opens it; the answer that loses nothing stands
   out.
+- **The trash** is a place, the last one, seen as a folder is (`core/bin`
+  answers what a `g.directory` would): under a name the folder it was in, and
+  when it was thrown away for a date. Delete throws away at once, and can be
+  undone; dropped on the place, the same. There, PUT BACK and EMPTY take NEW
+  FOLDER's place; nothing in it is opened, dragged, cut or renamed: it is put
+  back first. For good (Shift+Delete, Delete in the trash, EMPTY) it is asked,
+  with how many and how much: DELETE stands out, and Return is it (Akusen,
+  2026-11-25).
 - **Undo** (Ctrl+Z, and beside the notice of what went elsewhere): the last
   thing done, while it can be put back whole. Moved: moved back; copied or made:
   to the trash; renamed: its name back. Never of what was merged with or put in
@@ -205,8 +213,9 @@ a drag past a threshold moves, a tap selects.
 Keys: arrows, Home/End, Page Up/Down, Enter, BackSpace and Alt+↑ (up),
 Alt+←/→, Alt+Home, Ctrl+H, Ctrl+L, Ctrl+F or just typing (filter), Ctrl+1/2
 (grid, list), F5 or Ctrl+R, F9 (places),
-space (preview), Ctrl+C/X/V, Ctrl+Z, F2, F4 (terminal), Ctrl+Shift+N, Menu,
-Escape. With their phases: Delete (trash), Shift+Delete (confirmed), Ctrl+T/W.
+space (preview), Ctrl+C/X/V, Ctrl+Z, F2, F4 (terminal), Ctrl+Shift+N, Delete
+(trash), Shift+Delete (for good, asked), Menu, Escape. With their phase:
+Ctrl+T/W.
 
 What runs a program (executables, `.desktop`, AppImage, Windows programs,
 Java archives) is asked before, whatever opens it; a shell script opens as the
@@ -246,7 +255,7 @@ text it is.
    folder and the operations panel; the menu of the right button (and of a long
    press), with *Open with* and *Open in the terminal*. Done, 2026-11-25.
 5. **Trash**: service, delete to trash, the trash place with restore and
-   empty.
+   empty. Done, 2026-11-25.
 6. **Panes and tabs**: the browser and the selection made one for each pane;
    then two panes, then tabs.
 7. **Comfort**: colours, bookmarks written, search, properties, drives.

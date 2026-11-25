@@ -5,6 +5,7 @@
 --   genoma Rizoma/genoma                   (RIZOMA_FOLDER: where it opens)
 --   genoma ipc rizoma open <folder>        (GENOMA_IPC names the socket)
 local g = require("@genoma")
+local bin = require("core/bin")
 local browser = require("core/browser")
 local config = require("core/config")
 local exchange = require("core/exchange")
@@ -63,14 +64,19 @@ end
 
 -- ---- Filter -------------------------------------------------------------------------
 
+-- Whether the keys are the field's: until one of what was found is chosen, and
+-- again as soon as something is typed.
+local looking = g.signal(true)
 local function filter(text: string)
     browser.filter.value = text
+    looking.value = true
     if text ~= "" then filtering.value = true end
 end
 local function stop_filtering()
     filtering.value = false
     browser.filter.value = ""
 end
+g.watch(function() return filtering.value end, function(on: boolean) if on then looking.value = true end end)
 -- Another folder is another search.
 g.watch(function() return browser.here.value end, function() filtering.value = false end)
 -- The best guess stands ready for Return, until one is chosen instead: as more
@@ -81,9 +87,13 @@ g.watch(function() return browser.filter.value .. "\0" .. browser.dir.count end,
     local at = g.untracked(function() return browser.cursor.value end)
     local shown = g.untracked(function() return browser.index.value end)
     if shown == nil or at == guessed then
+        local first = g.untracked(function() return browser.dir:at(1) end)
+        guessed = if first then first.path else nil
         browser.stand(1)
-        guessed = g.untracked(function() return browser.cursor.value end)
     end
+end)
+g.watch(function() return browser.cursor.value end, function(at: string?)
+    if at ~= nil and at ~= guessed then looking.value = false end
 end)
 
 -- ---- A new folder -------------------------------------------------------------------
@@ -91,6 +101,7 @@ end)
 local naming = g.signal(false)
 local new_name = g.signal("")
 local function new_folder()
+    if g.untracked(browser.in_trash) then return end
     stop_filtering()
     new_name.value = operations.free_name("New folder")
     naming.value = true
@@ -107,12 +118,22 @@ g.watch(function() return filtering.value end, function(on: boolean) if on then 
 -- ---- Keys ---------------------------------------------------------------------------
 
 local function open_chosen()
+    if g.untracked(browser.in_trash) then
+        operations.restore(selection.list())
+        return
+    end
     if g.untracked(selection.count) > 1 then
         browser.open_all(g.untracked(function() return selection.entries(1000) end))
         return
     end
     local e = g.untracked(browser.selected)
     if e then browser.open(e) end
+end
+
+-- Return: what is asked is answered yes; else what is chosen opens.
+local function enter()
+    local notice = g.untracked(function() return browser.notice.value end)
+    if notice and notice.act and not notice.passing then notice.act() else open_chosen() end
 end
 
 local function across(): number
@@ -204,7 +225,9 @@ local function key(name: string, text: string?, mods: any)
         local letter = string.lower(name)
         if letter == "h" then toggle("hidden")
         elseif letter == "l" then path_bar.editing.value = true
-        elseif letter == "f" then filtering.value = true
+        elseif letter == "f" then
+            filtering.value = true
+            looking.value = true
         elseif letter == "r" then browser.dir:reload()
         elseif name == "1" then config.set("view", "grid")
         elseif name == "2" then config.set("view", "list")
@@ -233,14 +256,22 @@ local function key(name: string, text: string?, mods: any)
     end
     if moved(name, mods, true) then return end
     if name == "Return" or name == "KP_Enter" then
-        local notice = g.untracked(function() return browser.notice.value end)
-        if notice and notice.act and not notice.passing then notice.act() else open_chosen() end
+        enter()
     elseif name == "BackSpace" then
-        if g.untracked(function() return filtering.value end) then stop_filtering() else browser.up() end
+        local typed = g.untracked(function() return browser.filter.value end)
+        if typed ~= "" then
+            -- Back to what was typed, one letter shorter.
+            local last = utf8.offset(typed, -1) or #typed
+            filter(string.sub(typed, 1, last - 1))
+        elseif g.untracked(function() return filtering.value end) then stop_filtering()
+        else browser.up() end
     elseif name == "Escape" then escape()
     elseif name == "F2" then
         local e = g.untracked(browser.selected)
         if e and g.untracked(selection.count) < 2 then operations.rename(e) end
+    elseif name == "Delete" or name == "KP_Delete" then
+        local list = selection.list()
+        if mods.shift or g.untracked(browser.in_trash) then operations.delete(list) else operations.throw(list) end
     elseif name == "F4" then
         browser.terminal(g.untracked(function() return browser.here.value end))
     elseif name == "Menu" or (name == "F10" and mods.shift) then
@@ -285,6 +316,7 @@ local function empty_text(): string
     local why = browser.dir.error
     if why then return (WORDS :: any)[why] or `This folder cannot be read: {why}` end
     if browser.dir.count > 0 or browser.dir.loading then return "" end
+    if browser.in_trash() and browser.filter.value == "" then return "The trash is empty" end
     if browser.filter.value ~= "" then return if browser.dir.searching then "Looking in the folders below" else "Nothing by that name" end
     if browser.dir.total > 0 then return "Only hidden files" end
     return "Nothing here"
@@ -382,7 +414,8 @@ local function field_w(): number
 end
 local function foot_room(): number
     local used = (if filtering.value then field_w() else button_w("Filter")) + 8 + button_w("Preview") + 8
-        + (if naming.value then field_w() else button_w("New folder")) + GAP
+        + (if browser.in_trash() then button_w("Put back") + 8 + button_w("Empty")
+            elseif naming.value then field_w() else button_w("New folder")) + GAP
     return math.max(120, width() - right_w() - GAP - used)
 end
 
@@ -397,10 +430,11 @@ local filter_button = foot_field.new {
     room = field_w,
     placeholder = "Here and below",
     stop = "Stop filtering",
-    focused = function() return not path_bar.editing.value and operations.renaming.value == nil and not menu.is_open() end,
+    focused = function() return looking.value and not path_bar.editing.value and operations.renaming.value == nil and not menu.is_open() end,
+    on_take = function() looking.value = true end,
     text = function() return browser.filter.value end,
     on_change = function(text: string) browser.filter.value = text end,
-    on_submit = open_chosen,
+    on_submit = enter,
     on_stop = stop_filtering,
 }
 local naming_button = foot_field.new {
@@ -462,7 +496,7 @@ end
 
 local function notice_button(kind: string, passing: boolean): any
     return ui.action {
-        id = if passing then "notice-back" else "notice-yes",
+        id = "notice-yes-" .. kind,
         name = "Do it",
         kind = kind,
         present = function()
@@ -500,7 +534,25 @@ local foot = g.box {
             lit = function() return preview_pinned() or peeking.value end,
             on_click = toggle_preview,
         },
-        naming_button,
+        g.box { present = function() return not browser.in_trash() end, naming_button },
+        ui.action {
+            id = "restore",
+            label = "Put back",
+            glyph = "restore",
+            bare = wordless,
+            present = browser.in_trash,
+            disabled = function() return selection.count() == 0 end,
+            on_click = function() operations.restore(selection.list()) end,
+        },
+        ui.action {
+            id = "empty",
+            label = "Empty",
+            glyph = "trash",
+            bare = wordless,
+            present = browser.in_trash,
+            disabled = function() return bin.count() == 0 end,
+            on_click = operations.empty,
+        },
     },
     pill(
         function() return browser.notice.value ~= nil end,
@@ -520,10 +572,11 @@ local foot = g.box {
             ui.action {
                 id = "notice-no",
                 label = "Cancel",
-                present = function() return not (browser.notice.value and browser.notice.value.passing) end,
+                present = asking,
                 on_click = function() browser.say(nil) end,
             },
-            -- What is asked stands out; what is only offered does not.
+            -- What is asked stands out, and Return is it; what is only offered
+            -- does not.
             notice_button("filled", false),
             notice_button("outline", true),
         }

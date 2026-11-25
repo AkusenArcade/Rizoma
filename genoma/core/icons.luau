@@ -16,6 +16,7 @@ local FOLDERS = {
     pictures = { "folder-pictures" },
     videos = { "folder-videos" },
     home = { "user-home", "folder-home" },
+    trash = { "user-trash" },
 }
 
 -- As the theme draws it for a size: at a list's, a shape alone.

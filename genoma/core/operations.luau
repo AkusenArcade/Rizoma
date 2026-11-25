@@ -4,8 +4,10 @@
 -- what comes after.
 local g = require("@genoma")
 local files = require("@genoma/files")
+local trash = require("@genoma/trash")
 local browser = require("core/browser")
 local exchange = require("core/exchange")
+local format = require("core/format")
 local paths = require("core/paths")
 local selection = require("core/selection")
 
@@ -91,6 +93,160 @@ local function take_away(list: { string })
     files:trash(list, function() look_again() end)
 end
 
+-- ---- The trash --------------------------------------------------------------------------
+
+-- Its place once it has gone: the next one is stood on.
+local leaving = g.signal(nil :: { list: { string }, place: number }?)
+g.effect(function()
+    local l = leaving.value
+    local count = browser.dir.count
+    if l == nil then return end
+    g.untracked(function()
+        for _, p in l.list do
+            if browser.dir:index(p) then return end
+        end
+        leaving.value = nil
+        if count > 0 and browser.cursor.value == nil or browser.index.value == nil and count > 0 then
+            browser.stand(math.clamp(l.place, 1, count))
+        end
+    end)
+end)
+local function leave(list: { string })
+    local first: number? = nil
+    for _, p in list do
+        local i = g.untracked(function() return browser.dir:index(p) end)
+        if i and (first == nil or i < first) then first = i end
+    end
+    leaving.value = if first then { list = list, place = first } else nil
+end
+
+-- Back where it was, by where it is now. What was thrown away a moment ago the
+-- trash may not have seen yet.
+local function put_out(list: { string }, on_done: ((r: any) -> ())?)
+    local tries = 0
+    local function go()
+        tries += 1
+        local known: { [string]: boolean } = {}
+        for _, t in g.untracked(function() return trash.items end) do known[t.file] = true end
+        local all = true
+        for _, p in list do all = all and known[p] == true end
+        if not all and tries < 12 then
+            if tries == 1 then trash:reload() end
+            g.after(0.15, go)
+            return
+        end
+        trash:restore(list, function(r: any)
+            look_again()
+            if on_done then on_done(r) end
+        end)
+    end
+    go()
+end
+
+function M.throw(list: { string })
+    if #list == 0 or g.untracked(browser.in_trash) then return end
+    leave(list)
+    files:trash(list, function(r: any)
+        look_again()
+        if #r.made == 0 then
+            leaving.value = nil
+            return
+        end
+        can_undo("Back from the trash", function()
+            put_out(r.made, function(back: any) M.arrive(back.made) end)
+        end)
+        browser.say { text = `{many(#r.made)} in the trash`, label = "Undo", act = M.undo_last, passing = true }
+    end)
+end
+
+-- Out of the trash, where each was.
+function M.restore(list: { string })
+    if #list == 0 then return end
+    leave(list)
+    put_out(list, function(r: any)
+        M.undo.value = nil
+        local n = #r.made
+        if n == 0 then return end
+        local to = paths.parent(r.made[1]) or "/"
+        for _, p in r.made do
+            if paths.parent(p) ~= to then to = "" end
+        end
+        browser.say {
+            text = if to == "" then `{many(n)} back where they were` else `{many(n)} back in {paths.called(to)}`,
+            label = if to == "" then nil else "Show",
+            act = if to == "" then nil else function()
+                browser.say(nil)
+                browser.go(to, r.made[1])
+            end,
+            passing = true,
+        }
+    end)
+end
+browser.restore = function(e: any)
+    browser.say(nil)
+    M.restore { e.path }
+end
+
+-- For good, once it is said so: how many, and what they come to.
+local function ask(text: string, list: { string }?, act: () -> ())
+    local counting: any = nil
+    local function say(more: string)
+        browser.say {
+            text = text .. more,
+            label = "Delete",
+            act = function()
+                if counting then counting:stop() end
+                browser.say(nil)
+                act()
+            end,
+            grave = true,
+        }
+    end
+    say("")
+    if list == nil then return end
+    counting = files:measure(list, function(total: any, whole: boolean)
+        local n = g.untracked(function() return browser.notice.value end)
+        -- Answered meanwhile, or asked something else.
+        if n == nil or not n.grave then
+            counting:stop()
+            return
+        end
+        if whole and total.bytes > 0 then say(` {format.size(total.bytes)}.`) end
+    end)
+end
+
+function M.delete(list: { string })
+    if #list == 0 then return end
+    local what = if #list == 1 then paths.name(list[1]) else many(#list)
+    -- In the trash a thing is called as it was.
+    if #list == 1 then
+        local i = g.untracked(function() return browser.dir:index(list[1]) end)
+        local e = if i then g.untracked(function() return browser.dir:at(i) end) else nil
+        if e then what = e.name end
+    end
+    local in_trash = g.untracked(browser.in_trash)
+    ask(`Delete {what} for good?`, list, function()
+        leave(list)
+        M.undo.value = nil
+        if in_trash then
+            trash:erase(list)
+        else
+            files:delete(list, function() look_again() end)
+        end
+    end)
+end
+
+function M.empty()
+    local all: { string } = {}
+    for _, t in g.untracked(function() return trash.items end) do table.insert(all, t.file) end
+    if #all == 0 then return end
+    ask(`Delete all that is in the trash, {many(#all)}, for good?`, all, function()
+        M.undo.value = nil
+        -- What was asked about, and nothing thrown away since.
+        trash:erase(all)
+    end)
+end
+
 -- What a person was asked about and answered: merged with or put in the place
 -- of something, it is no longer only what went there, and is not taken back.
 local answered: { [number]: boolean } = {}
@@ -162,6 +318,11 @@ end
 M.put = put
 
 exchange.dropped = function(list: { string }, to: string, verb: exchange.Verb)
+    if to == paths.TRASH then
+        -- Given only to be copied, it is not ours to throw away.
+        if verb == "move" then M.throw(list) else browser.say { text = "It cannot be thrown away from there" } end
+        return
+    end
     -- Let go where it was, it was not meant to go anywhere.
     local here_already = verb == "move"
     for _, p in list do here_already = here_already and paths.parent(p) == to end
@@ -171,6 +332,7 @@ end
 -- Into a folder; the one shown.
 function M.paste(folder: string?)
     local to = folder or here()
+    if to == paths.TRASH then return end
     exchange.held(function(list: { string }, verb: exchange.Verb)
         if #list == 0 then
             browser.say { text = "There are no files to paste" }
@@ -200,6 +362,7 @@ function M.wrong(): string?
 end
 
 function M.rename(e: any)
+    if e.deleted then return end
     M.typed.value = e.name
     M.renaming.value = { path = e.path, name = e.name, dir = e.dir }
 end

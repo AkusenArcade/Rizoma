@@ -3,6 +3,7 @@
 local g = require("@genoma")
 local mime = require("@genoma/mime")
 local browser = require("core/browser")
+local bin = require("core/bin")
 local exchange = require("core/exchange")
 local operations = require("core/operations")
 local paths = require("core/paths")
@@ -39,10 +40,22 @@ local function with(e: any): { menu.Item }
     return out
 end
 
+local function thrown(e: any, list: { string }): { menu.Item | string }
+    return {
+        { text = if #list == 1 then "Put back" else `Put {#list} back`, keys = "Enter", act = function() operations.restore(list) end },
+        "-",
+        { text = "Delete for good", keys = "⇧ Del", act = function() operations.delete(list) end },
+    }
+end
+
 -- On an entry: what is done is done to all that are selected.
 function M.on_entry(e: any, by_key: boolean?)
     local list = selection.list()
     if #list == 0 then list = { e.path } end
+    if e.deleted then
+        show(thrown(e, list), by_key)
+        return
+    end
     local items: { menu.Item | string } = {}
     local function add(it: menu.Item | string) table.insert(items, it) end
     if #list > 1 then
@@ -70,12 +83,22 @@ function M.on_entry(e: any, by_key: boolean?)
         add "-"
         add { text = "Rename", keys = "F2", act = function() operations.rename(e) end }
     end
+    add "-"
+    add { text = "Move to the trash", keys = "Del", act = function() operations.throw(list) end }
     show(items, by_key)
 end
 
 -- On the folder's own ground.
 function M.on_ground(by_key: boolean?)
     local at = here()
+    if at == paths.TRASH then
+        show({
+            { text = "Select all", keys = "Ctrl A", act = selection.all },
+            "-",
+            { text = "Empty the trash", off = g.untracked(bin.count) == 0, act = operations.empty },
+        }, by_key)
+        return
+    end
     show({
         { text = "New folder", keys = "Ctrl ⇧ N", act = function() M.new_folder() end },
         { text = "Paste", keys = "Ctrl V", off = not holds(), act = function() operations.paste() end },
@@ -90,6 +113,13 @@ end
 
 -- On a place, or a step of the path.
 function M.on_place(path: string, go: () -> ())
+    if path == paths.TRASH then
+        show {
+            { text = "Open", act = go },
+            { text = "Empty the trash", off = g.untracked(bin.count) == 0, act = operations.empty },
+        }
+        return
+    end
     show {
         { text = "Open", act = go },
         { text = "Open in the terminal", act = function() browser.terminal(path) end },

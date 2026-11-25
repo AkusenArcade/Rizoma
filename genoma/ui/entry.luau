@@ -25,7 +25,7 @@ function M.picture(entry: () -> any, size: number, pictured: boolean): any
         if not pictured or e == nil or e.dir or e.broken or not thumbnails:can(e.mime) then return nil end
         return thumbnails:of(e.path, {
             size = if size > 128 then "x-large" elseif size > 64 then "large" else "normal",
-            modified = e.modified,
+            modified = if e.deleted then nil else e.modified,
             mime = e.mime,
         })
     end)
@@ -167,7 +167,8 @@ function M.handlers(node: { [any]: any }, entry: () -> any): { [any]: any }
     end
     node.drag_files = function(): string
         local e = entry()
-        if e == nil or pressed.value ~= e.path then return "" end
+        -- Out of the trash a thing goes by being put back.
+        if e == nil or e.deleted or pressed.value ~= e.path then return "" end
         return exchange.dragged(if selection.has(e.path) then selection.list() else { e.path })
     end
     node.drag_actions = "both"
@@ -175,7 +176,7 @@ function M.handlers(node: { [any]: any }, entry: () -> any): { [any]: any }
     return exchange.target(node, function(): string?
         local e = entry()
         if e == nil then return nil end
-        return if e.dir and not e.broken then e.path else browser.here.value
+        return if e.dir and not e.broken and not e.deleted then e.path else browser.here.value
     end, true)
 end
 

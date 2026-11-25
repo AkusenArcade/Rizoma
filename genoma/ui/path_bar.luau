@@ -266,6 +266,7 @@ end
 g.watch(function() return M.editing.value end, function(on: boolean)
     if not on then return end
     local here = g.untracked(function() return browser.here.value end)
+    if here == paths.TRASH then here = paths.home end
     completion.typed.value = if here == "/" then "/" else here .. "/"
     completion.at.value = 0
 end)

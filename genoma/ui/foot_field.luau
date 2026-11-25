@@ -18,7 +18,8 @@ end
 
 -- `t`: id, label, glyph, dashed, open(), on_open(), bare(), room() the field's
 -- width, text(), on_change(text), on_submit(), on_stop(), placeholder, stop (what
--- its closing button is called), focused(), select, wrong().
+-- its closing button is called), focused(), on_take() a press in it, select,
+-- wrong().
 function M.new(t: { [string]: any }): any
     local over = g.signal(false)
     local function on(): boolean return t.open() end
@@ -74,6 +75,7 @@ function M.new(t: { [string]: any }): any
                 caret_color = look.primary,
                 selection_color = look.chosen,
                 placeholder = t.placeholder,
+                on_press = function() if t.on_take then t.on_take() end end,
                 select = t.select or "none",
                 focused = function() return on() and t.focused() end,
                 text = t.text,

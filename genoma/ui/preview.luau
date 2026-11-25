@@ -75,7 +75,7 @@ end)
 -- which any format has and which is the right way up.
 local MOVING = { ["image/gif"] = true, ["image/webp"] = true, ["image/apng"] = true }
 local function kind_of(e: any): string
-    if e.broken then return "other" end
+    if e.broken or e.path == paths.TRASH then return "other" end
     if e.dir then return "folder" end
     if MOVING[e.mime] and e.size < 32e6 then return "moving" end
     if thumbnails:can(e.mime) then return "pictured" end
@@ -303,7 +303,7 @@ local function page(e: any, width: number, height: () -> number): any
         head = picture(function() return e.path end, e, inner, math.min(room, inner))
     elseif kind == "pictured" then
         local made = g.computed(function(): string?
-            return thumbnails:of(e.path, { size = "x-large", modified = e.modified, mime = e.mime })
+            return thumbnails:of(e.path, { size = "x-large", modified = if e.deleted then nil else e.modified, mime = e.mime })
         end)
         head = picture(function() return made.value end, e, inner, math.min(room, inner))
     elseif kind == "text" then
@@ -313,7 +313,7 @@ local function page(e: any, width: number, height: () -> number): any
     elseif kind == "folder" then
         head, count = folder_head(e, inner, room)
     end
-    local opens = if e.dir or e.broken or e.many then nil else apps_mime:default(e.mime)
+    local opens = if e.dir or e.broken or e.many or e.deleted then nil else apps_mime:default(e.mime)
     local in_now = g.signal(false)
     g.after(0, function() in_now.value = true end)
     return g.box {
@@ -342,7 +342,7 @@ local function page(e: any, width: number, height: () -> number): any
                 weight = 600,
             },
             g.text {
-                text = if e.broken then "Link to nothing" elseif e.many then M.said(e.sum) else apps_mime:description(e.mime),
+                text = if e.broken then "Link to nothing" elseif e.many then M.said(e.sum) elseif e.path == paths.TRASH then "" else apps_mime:description(e.mime),
                 max_width = inner,
                 color = look.text_muted,
                 font = look.expressive,
@@ -357,7 +357,8 @@ local function page(e: any, width: number, height: () -> number): any
                 if e.many then return if e.sum.bytes and e.sum.files > 0 then format.size(e.sum.bytes) else "" end
                 return if e.dir then "" else format.size(e.size)
             end),
-            fact("Modified", function() return format.moment(e.modified) end),
+            fact(if e.deleted then "Thrown away" else "Modified", function() return format.moment(e.modified) end),
+            fact("Was in", function() return if e.deleted then e.within else "" end, true),
             fact("Opens with", function() return if opens then opens.name else "" end, true),
         },
     }

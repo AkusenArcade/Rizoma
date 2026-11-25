@@ -53,13 +53,13 @@ function M.sort_by(key: string)
     end
 end
 
-local function title(key: string, label: string, width: () -> number, justify: string, present: (() -> boolean)?): any
+local function title(key: string, label: string | () -> string, width: () -> number, justify: string, present: (() -> boolean)?): any
     local over = g.signal(false)
     local function current(): boolean return config.get("sort") == key end
     return g.box {
         id = "sort-" .. key,
         role = "button",
-        name = "Sort by " .. label,
+        name = "Sort by " .. key,
         present = present,
         width = width,
         height = HEAD,
@@ -226,7 +226,7 @@ function M.new(width: () -> number, height: () -> number): any
             gap = GAP,
             title("name", "Name", function() return name_room(width()) + 38 end, "start"),
             title("size", "Size", function() return SIZE_W end, "end", function() return (wide(width())) end),
-            title("modified", "Modified", function() return MODIFIED_W end, "start", function()
+            title("modified", function() return if browser.in_trash() then "Thrown away" else "Modified" end, function() return MODIFIED_W end, "start", function()
                 local _, modified = wide(width())
                 return modified
             end),

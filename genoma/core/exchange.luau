@@ -51,6 +51,7 @@ local function offer(list: { string }, verb: "copy" | "cut")
 end
 
 function M.copy(list: { string }?)
+    if g.untracked(browser.in_trash) then return end
     local chosen = list or selection.list()
     if #chosen == 0 then return end
     offer(chosen, "copy")
@@ -58,6 +59,8 @@ function M.copy(list: { string }?)
 end
 
 function M.cut(list: { string }?)
+    -- What the trash knows of a thing would stay behind.
+    if g.untracked(browser.in_trash) then return end
     local chosen = list or selection.list()
     if #chosen == 0 then return end
     offer(chosen, "cut")
@@ -166,6 +169,7 @@ M.over = over
 -- Moved on one disk, copied to another; Ctrl copies, Shift moves. From
 -- another program it is copied, unless Shift says otherwise.
 local function verb_of(o: Over): Verb
+    if o.folder == paths.TRASH then return "move" end
     local m = g.modifiers()
     if m.ctrl then return "copy" end
     if m.shift then return "move" end
@@ -196,6 +200,7 @@ local OPEN_AFTER = 0.8
 -- would go, nil for nowhere; `opens`: held over, it is gone into.
 function M.target(node: { [any]: any }, folder: () -> string?, opens: boolean?): { [any]: any }
     local waiting: any = nil
+    local hovered: string? = nil
     local function stop()
         if waiting then waiting:stop() end
         waiting = nil
@@ -203,6 +208,7 @@ function M.target(node: { [any]: any }, folder: () -> string?, opens: boolean?):
     node.on_drop_hover = function(on: boolean, own: boolean)
         local f = g.untracked(folder)
         stop()
+        hovered = if on then f else nil
         local now = g.untracked(function() return over.value end)
         if not on then
             if now and now.folder == f then over.value = nil end
@@ -214,6 +220,7 @@ function M.target(node: { [any]: any }, folder: () -> string?, opens: boolean?):
         end
         over.value = { folder = f, own = own, same = nil }
         local list = M.carried()
+        if f == paths.TRASH then return end
         if own and #list > 0 then
             files:same_disk(list, f, function(same: boolean)
                 local o = g.untracked(function() return over.value end)
@@ -229,7 +236,8 @@ function M.target(node: { [any]: any }, folder: () -> string?, opens: boolean?):
     end
     node.drop_action = function(): string
         local o = over.value
-        return if o and o.folder == folder() then verb_of(o) elseif g.modifiers().shift then "move" else "copy"
+        if o and o.folder == folder() then return verb_of(o) end
+        return if folder() == paths.TRASH or g.modifiers().shift then "move" else "copy"
     end
     node.on_drop = function(drop: any)
         stop()
@@ -245,7 +253,7 @@ function M.target(node: { [any]: any }, folder: () -> string?, opens: boolean?):
         end
         if o == nil or o.folder ~= f then o = { folder = f, own = true, same = nil } end
         local m = g.untracked(g.modifiers)
-        if m.ctrl or m.shift or (o :: Over).same ~= nil then
+        if m.ctrl or m.shift or f == paths.TRASH or (o :: Over).same ~= nil then
             M.dropped(list, f, g.untracked(function() return verb_of(o :: Over) end))
         else
             -- Let go before it was known.
@@ -254,9 +262,9 @@ function M.target(node: { [any]: any }, folder: () -> string?, opens: boolean?):
     end
     g.cleanup(function()
         stop()
-        local f = g.untracked(folder)
+        -- What it stood for may be gone already: what it was over is known.
         local o = g.untracked(function() return over.value end)
-        if o and o.folder == f then over.value = nil end
+        if o and o.folder == hovered then over.value = nil end
     end)
     return node
 end

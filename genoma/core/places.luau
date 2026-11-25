@@ -74,6 +74,7 @@ M.list = g.computed(function(): { Place }
     end
 
     table.insert(out, { name = "Computer", path = "/", glyph = "computer", group = "computer" })
+    table.insert(out, { name = "Trash", path = paths.TRASH, glyph = "trash", group = "computer" })
     return out
 end)
 

@@ -153,7 +153,7 @@ g.effect(function()
         if s.count == 0 or browser.dir.loading then return end
         -- Chosen in a folder not shown yet: it is on its way.
         local one = next(s.paths)
-        if one and not path_of.inside(one, browser.dir.path) then return end
+        if one and browser.dir.path ~= path_of.TRASH and not path_of.inside(one, browser.dir.path) then return end
         local shown: { [string]: boolean } = {}
         for _, p in browser.dir:paths() do
             if s.paths[p] then shown[p] = true end

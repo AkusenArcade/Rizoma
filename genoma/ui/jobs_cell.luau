@@ -80,9 +80,10 @@ local function all(): number
     return if total > 0 then done / total else 0
 end
 
-local DOING = { copy = "Copying", move = "Moving", link = "Linking", delete = "Deleting", trash = "Moving to the trash", restore = "Restoring", erase = "Erasing" }
+local DOING = { copy = "Copying", move = "Moving", link = "Linking", delete = "Deleting", restore = "Putting back", erase = "Erasing" }
 local function title(j: Job): string
     local what = if j.count == 1 then "1 item" else `{j.count} items`
+    if j.kind == "trash" then return `Moving {what} to the trash` end
     local to = if j.to then ` to {paths.called(j.to)}` else ""
     return `{(DOING :: any)[j.kind] or j.kind} {what}{to}`
 end

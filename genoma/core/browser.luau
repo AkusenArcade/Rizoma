@@ -4,6 +4,7 @@
 local g = require("@genoma")
 local apps = require("@genoma/apps")
 local mime = require("@genoma/mime")
+local bin = require("core/bin")
 local config = require("core/config")
 local paths = require("core/paths")
 
@@ -26,8 +27,15 @@ function M.can_back(): boolean return #back.value > 0 end
 function M.can_forward(): boolean return #forward.value > 0 end
 function M.can_up(): boolean return paths.parent(here.value) ~= nil end
 
-M.dir = g.directory {
-    path = function() return here.value end,
+-- The folder last asked for: the trash is none.
+local folder = g.state("rizoma.folder", paths.home)
+g.watch(function() return here.value end, function(path: string)
+    if path ~= paths.TRASH then folder.value = path end
+end)
+function M.in_trash(): boolean return here.value == paths.TRASH end
+
+local real = g.directory {
+    path = function() return folder.value end,
     sort = function() return config.get("sort") end,
     descending = function() return config.get("descending") end,
     folders_first = function() return config.get("folders_first") end,
@@ -36,11 +44,34 @@ M.dir = g.directory {
     -- What is typed is looked for in the folders below too.
     deep = true,
 }
+local thrown = bin.new { filter = function() return M.filter.value end }
+
+-- Which of the two is seen: the trash until the folder one goes to is read.
+local seen_thrown = g.signal(g.untracked(M.in_trash))
+g.effect(function()
+    local now = M.in_trash()
+    local ready = real.path == here.value or not real.loading
+    g.untracked(function()
+        if now then seen_thrown.value = true elseif ready then seen_thrown.value = false end
+    end)
+end)
+
+-- What is shown, a folder or the trash, asked in the same words.
+local function seen(): any return if seen_thrown.value then thrown else real end
+local asked: { [string]: any } = {}
+for _, name in { "at", "slice", "paths", "index", "reload" } do
+    asked[name] = function(_: any, ...: any): any
+        local from = seen()
+        return from[name](from, ...)
+    end
+end
+M.dir = setmetatable(asked, { __index = function(_: any, key: string): any return seen()[key] end }) :: any
 
 -- What has to be said once: a file nothing opens, a question before a
 -- program runs. `act` is what its button does.
 -- `passing`: offered, not asked: it goes by itself.
-export type Notice = { text: string, label: string?, act: (() -> ())?, passing: boolean? }
+-- `grave`: what it asks cannot be undone.
+export type Notice = { text: string, label: string?, act: (() -> ())?, passing: boolean?, grave: boolean? }
 M.notice = g.signal(nil :: Notice?)
 local quiet: any = nil
 function M.say(notice: Notice?)
@@ -148,6 +179,9 @@ local function launch(app: any, path: string)
     }
 end
 
+-- Set by core/operations.
+M.restore = function(_: any) end
+
 -- With an application chosen for it.
 function M.open_with(app: any, list: { string })
     g.activation_token {
@@ -158,6 +192,7 @@ end
 
 -- A folder in the desktop's terminal.
 function M.terminal(folder: string)
+    if folder == paths.TRASH then return end
     g.activation_token {
         on_token = function(token: string?)
             local ok, why = pcall(function() apps:terminal(folder, token) end)
@@ -193,6 +228,10 @@ function M.open_all(entries: { any })
 end
 
 function M.open(e: any)
+    if e.deleted then
+        M.say { text = `{e.name} is in the trash: put back, it can be opened`, label = "Restore", act = function() M.restore(e) end, passing = true }
+        return
+    end
     if e.broken then
         M.say { text = `{e.name} points to something that is no longer there` }
         return
