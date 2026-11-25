@@ -1,6 +1,7 @@
 # Rizoma — plan
 
-Status: draft, 2026-11-18. Pace: slow, no deadline.
+Status: phase 1 built, 2026-11-25 (`genoma/`); phase 2 in part (types and
+thumbnails; the preview pane is not). Pace: slow, no deadline.
 
 ## 1. What it is
 
@@ -103,27 +104,43 @@ files with names that are not UTF-8 in `apps:launch`.
 
 ## 5. Interface
 
-Window layout (wide):
+As built (2026-11-25). No title bar, as every Genoma app:
 
 ```
-┌──────────┬───────────────────────────────────────────┬──────────┐
-│ places   │ ‹ › ⌂  Home / Documents / Development   ⌕ │          │
-│ drives   ├───────────────────────────────────────────┤ preview  │
-│ bookmarks│   grid or list                            │ (toggle) │
-│ trash    │                                           │          │
-│          │                                           │          │
-└──────────┴───────────────────────────────────────────┴──────────┘
-                    operations indicator → panel (grows from it)
+┌──────────┐ (‹)(›)(^) (Home)─(Documents)─(Development)
+│ places   │
+│ bookmarks│   grid or list, straight on the window's ground
+│ computer │
+│          │
+└──────────┘ (what is stood on · a notice · the filter)   (view)
 ```
 
-Responsive by `on_size` breakpoints: the preview goes first, then the
-sidebar collapses to a button; the grid's columns are computed from the
-width (as in OBS Touch Control). Touch (HDMI-A-1 is a touchscreen): long
-press = context menu, a drag past a threshold moves, a tap selects.
+- **The path is a rhizome**: each folder a capsule, a thread between them.
+  Going into a folder grows a shoot from the last capsule; coming out, it
+  retracts. The current one, pressed, becomes a field (Ctrl+L); a deep path
+  keeps its start and as many of its last steps as fit.
+- **Places**: the user's folders, the GTK bookmarks (read, not written yet),
+  the computer. Pinned beside the folder at 760 wide and more; under that, or
+  put away (F9), a button they grow from and float over the folder.
+- **View**: a button at the foot's right, and the cell that grows from it:
+  grid or list, order, reversed, folders first, hidden files, places, size.
+- **Foot**: nothing at rest. What is stood on (the grid only: the list says it
+  in its columns), a notice, the filter typed over the folder.
+- The preview pane comes with the rest of phase 2.
 
-Keys: the usual set — Ctrl+C/X/V, F2, Delete (trash), Shift+Delete
-(confirmed), Ctrl+H, Ctrl+L, Alt+←/→, Backspace, Ctrl+T/W, Ctrl+F, Enter,
-Ctrl+Shift+N.
+Responsive by the window's size: the sidebar collapses to a button, the list
+loses its type, then its date, then its size; the grid's columns are computed
+from the width. Touch (HDMI-A-1 is a touchscreen): long press = context menu,
+a drag past a threshold moves, a tap selects.
+
+Keys: arrows, Home/End, Page Up/Down, Enter, BackSpace and Alt+↑ (up),
+Alt+←/→, Alt+Home, Ctrl+H, Ctrl+L, Ctrl+F or just typing (filter), Ctrl+1/2
+(grid, list), F5 or Ctrl+R, F9 (places), Escape. With their phases: Ctrl+C/X/V,
+F2, Delete (trash), Shift+Delete (confirmed), Ctrl+T/W, Ctrl+Shift+N.
+
+What runs a program (executables, `.desktop`, AppImage, Windows programs,
+Java archives) is asked before, whatever opens it; a shell script opens as the
+text it is.
 
 ## 6. Safety rules for `files`
 
