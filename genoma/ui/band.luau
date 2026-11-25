@@ -3,15 +3,11 @@
 -- it touches, and past an edge the view goes on. A mouse's: a finger there
 -- scrolls.
 local g = require("@genoma")
-local browser = require("core/browser")
 local actions = require("ui/actions")
-local selection = require("core/selection")
+local panes = require("core/panes")
 local look = require("ui/look")
 
 local M = {}
-
--- The row to keep in view while the band is past an edge, or nil.
-M.row = g.signal(nil :: number?)
 
 local EDGE = 0.09
 
@@ -21,7 +17,10 @@ local EDGE = 0.09
 -- Where the ground is an entry's too (a list's rows): ground(y, count) is a
 -- press on it at that height, held(y) a finger held there, over(y) the pointer
 -- on it, nil once off. Coordinates are the list's.
-function M.new(t: { [string]: any }, inner: any): any
+-- `pane`: whose folder it is; its view's `banded` is the row to keep in view
+-- while the band is past an edge, or nil.
+function M.new(pane: any, t: { [string]: any }, inner: any): any
+    local selection, row_kept = pane.selection, pane.view.banded
     local box = g.signal(nil :: any)
     local from: any, at: any, base: any, edge: any = nil, nil, nil, nil
     local far = false
@@ -36,7 +35,7 @@ function M.new(t: { [string]: any }, inner: any): any
     local function rest()
         if edge then edge:stop() end
         edge = nil
-        M.row.value = nil
+        row_kept.value = nil
     end
     local function past_edge()
         local h = g.untracked(t.height)
@@ -50,7 +49,7 @@ function M.new(t: { [string]: any }, inner: any): any
                 on_tick = function()
                     local top = g.untracked(t.scroll)
                     local row = if at.y < 0 then t.row_at(top) - 1 else t.row_at(top + h) + 1
-                    M.row.value = math.clamp(row, 1, math.max(1, g.untracked(t.rows)))
+                    row_kept.value = math.clamp(row, 1, math.max(1, g.untracked(t.rows)))
                     update()
                 end,
             }
@@ -70,6 +69,7 @@ function M.new(t: { [string]: any }, inner: any): any
             return true
         end,
         on_press = function(button: number, x: number, y: number, touch: boolean)
+            panes.focus(pane)
             if t.pressed then t.pressed(touch) end
             if button ~= 272 or touch then return end
             local m = g.untracked(g.modifiers)
@@ -85,7 +85,7 @@ function M.new(t: { [string]: any }, inner: any): any
                 local s = g.untracked(t.scroll)
                 if math.abs(x - from.x) + math.abs(y + s - from.y) < 5 then return end
                 far = true
-                browser.cursor.value = nil
+                pane.cursor.value = nil
             end
             update()
             past_edge()
@@ -100,11 +100,11 @@ function M.new(t: { [string]: any }, inner: any): any
             if banded then g.after(0, function() far = false end) end
         end,
         on_click = function(button: number, _: number, y: number, count: number)
-            if button == 275 then browser.back() return end
-            if button == 276 then browser.forward() return end
+            if button == 275 then pane.back() return end
+            if button == 276 then pane.forward() return end
             if button == 273 then
                 if t.menu and t.menu(y + g.untracked(t.scroll)) then return end
-                browser.leave()
+                pane.leave()
                 actions.on_ground()
                 return
             end
@@ -112,7 +112,7 @@ function M.new(t: { [string]: any }, inner: any): any
             if t.ground and t.ground(y + g.untracked(t.scroll), count) then return end
             local m = g.untracked(g.modifiers)
             if m.ctrl or m.shift then return end
-            browser.leave()
+            pane.leave()
         end,
         inner,
         t.mark,

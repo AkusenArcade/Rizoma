@@ -1,6 +1,6 @@
 # Rizoma — plan
 
-Status: phases 1 to 5 and the colours built, 2026-11-25 (`genoma/`). Pace: slow, no deadline.
+Status: phases 1 to 6 and the colours built, 2026-11-25 (`genoma/`). Pace: slow, no deadline.
 
 ## 1. What it is
 
@@ -207,6 +207,23 @@ As built (2026-11-25). No title bar, as every Genoma app:
   `$XDG_DATA_HOME/rizoma/colours.json`, which serves what can have no attribute
   (links, FAT, what is not ours to write) and what a program saves by putting
   another file in its place; what Rizoma moves or renames is followed there too.
+- **What is over what** (Akusen, 2026-11-25): the bar, one, of the ways and the
+  path; under it the tabs, when there is more than one; under them one pane or
+  two. The bar is about the pane that has the keys, and so are the foot and the
+  preview; the other one stands back.
+- **Tabs**: a capsule each, with the names of the folders its panes show, two of
+  them a seam between, the one that has the keys lit. NEW TAB in the foot while there are none
+  (Akusen, 2026-11-25), then the row's own +; Ctrl+T, Ctrl+W (the last
+  closes the window), Ctrl+Tab and Ctrl+Page, with Shift moved; a folder, a
+  place or a step opened beside with the middle button; dragged along the row;
+  files dropped on one go to its folder, held over it, it opens. A window starts
+  with one: they are not remembered.
+- **Two panes** (F3, TWO PANES): side by side where the folder has 560, else
+  the one that has the keys alone; Tab, or a press, gives them to the other. F6
+  moves what is selected to the other's folder, Shift+F6 copies. Each has its
+  own way back, selection, filter and place in the list (`core/pane`;
+  `core/browser` and `core/selection` speak of the one that has the keys).
+- Closed while something is being done to files, it is asked first.
 - **Undo** (Ctrl+Z, and beside the notice of what went elsewhere): the last
   thing done, while it can be put back whole. Moved: moved back; copied or made:
   to the trash; renamed: its name back. Never of what was merged with or put in
@@ -221,8 +238,8 @@ Keys: arrows, Home/End, Page Up/Down, Enter, BackSpace and Alt+↑ (up),
 Alt+←/→, Alt+Home, Ctrl+H, Ctrl+L, Ctrl+F or just typing (filter), Ctrl+1/2
 (grid, list), F5 or Ctrl+R, F9 (places),
 space (preview), Ctrl+C/X/V, Ctrl+Z, F2, F4 (terminal), Ctrl+Shift+N, Delete
-(trash), Shift+Delete (for good, asked), Alt+0…6 (colours), Menu, Escape. With their phase:
-Ctrl+T/W.
+(trash), Shift+Delete (for good, asked), Alt+0…6 (colours), Ctrl+T/W/Tab (tabs),
+F3, Tab, F6 (panes), Menu, Escape.
 
 What runs a program (executables, `.desktop`, AppImage, Windows programs,
 Java archives) is asked before, whatever opens it; a shell script opens as the
@@ -264,7 +281,7 @@ text it is.
 5. **Trash**: service, delete to trash, the trash place with restore and
    empty. Done, 2026-11-25.
 6. **Panes and tabs**: the browser and the selection made one for each pane;
-   then two panes, then tabs.
+   then two panes, then tabs. Done, 2026-11-25.
 7. **Comfort**: colours (done, 2026-11-25), bookmarks written, search, properties, drives.
 8. **Desktop integration**: `FileManager1`, Rizoma as the default for
    `inode/directory` (today it is Nautilus), Bioma's launcher reveal and
@@ -281,7 +298,6 @@ Rust tests for the services; live runs on scratch folders.
   there is something to show.
 - View: one global choice (grid or list, sort, hidden), as Nautilus does,
   not remembered per folder.
-
 - A colour is kept as an extended attribute of the file
   (`user.rizoma.colour`), which follows a rename and a move on its disk; where
   a disk has none, in a file of Rizoma's (Akusen, 2026-11-25).
@@ -291,4 +307,4 @@ Rust tests for the services; live runs on scratch folders.
 
 ## 9. Open
 
-- **Whether a tab is remembered** when the window closes.
+Nothing at the moment.

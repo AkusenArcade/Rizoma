@@ -9,6 +9,7 @@ local browser = require("core/browser")
 local colours = require("core/colours")
 local exchange = require("core/exchange")
 local format = require("core/format")
+local panes = require("core/panes")
 local paths = require("core/paths")
 local selection = require("core/selection")
 
@@ -18,7 +19,9 @@ local function here(): string return g.untracked(function() return browser.here.
 
 -- What was found is not followed: it is looked at again after a change.
 local function look_again()
-    if g.untracked(browser.looking) then browser.dir:reload() end
+    for _, p in g.untracked(panes.shown) do
+        if g.untracked(p.looking) then p.dir:reload() end
+    end
 end
 
 -- ---- What comes of it -----------------------------------------------------------------
@@ -28,8 +31,10 @@ local coming = g.signal(nil :: { string }?)
 local giving_up: any = nil
 function M.arrive(list: { string })
     local mine: { string } = {}
+    local shown: { [string]: boolean } = {}
+    for _, pane in g.untracked(panes.shown) do shown[g.untracked(function() return pane.here.value end)] = true end
     for _, p in list do
-        if paths.parent(p) == here() then table.insert(mine, p) end
+        if shown[paths.parent(p) or ""] then table.insert(mine, p) end
     end
     if #mine == 0 then return end
     coming.value = mine
@@ -41,20 +46,23 @@ function M.arrive(list: { string })
 end
 g.effect(function()
     local list = coming.value
-    local _ = browser.dir.count
+    for _, p in panes.shown() do local _ = p.dir.count end
     if list == nil then return end
     g.untracked(function()
-        local shown: { string } = {}
-        for _, p in list do
-            if browser.dir:index(p) then table.insert(shown, p) end
+        for _, pane in panes.shown() do
+            local shown: { string } = {}
+            for _, p in list do
+                if pane.dir:index(p) then table.insert(shown, p) end
+            end
+            if #shown == #list then
+                coming.value = nil
+                g.batch(function()
+                    pane.cursor.value = shown[1]
+                    pane.selection.only(shown[1])
+                    if #shown > 1 then pane.selection.these(shown) end
+                end)
+            end
         end
-        if #shown < #list then return end
-        coming.value = nil
-        g.batch(function()
-            browser.cursor.value = shown[1]
-            selection.only(shown[1])
-            if #shown > 1 then selection.these(shown) end
-        end)
     end)
 end)
 
@@ -303,14 +311,18 @@ function put(list: { string }, to: string, verb: exchange.Verb, after: (() -> ()
             can_undo("The copies are in the trash", function() take_away(r.made) end)
         end
         local said: { string } = {}
-        if to ~= here() and #r.made > 0 then
+        local elsewhere = true
+        for _, pane in g.untracked(panes.shown) do
+            if g.untracked(function() return pane.here.value end) == to then elsewhere = false end
+        end
+        if elsewhere and #r.made > 0 then
             table.insert(said, `{many(#r.made)} {if verb == "move" then "moved" else "copied"} to {paths.called(to)}`)
         end
         if #r.skipped > 0 then table.insert(said, `{many(#r.skipped)} left out`) end
         local lost = kept_words(r.lost)
         if lost ~= "" then table.insert(said, `without some {lost}`) end
         if #said == 0 then return end
-        local back = whole and to ~= here()
+        local back = whole and elsewhere
         browser.say {
             text = table.concat(said, ", "),
             label = if back then "Undo" else nil,
@@ -332,6 +344,16 @@ exchange.dropped = function(list: { string }, to: string, verb: exchange.Verb)
     local here_already = verb == "move"
     for _, p in list do here_already = here_already and paths.parent(p) == to end
     if not here_already then put(list, to, verb) end
+end
+
+-- What is selected, to the other pane's folder.
+function M.across(verb: exchange.Verb)
+    local other = g.untracked(panes.other)
+    if other == nil or g.untracked(browser.in_trash) then return end
+    local list = selection.list()
+    if #list == 0 then return end
+    local to = g.untracked(function() return other.here.value end)
+    if to == paths.TRASH then M.throw(list) else put(list, to, verb) end
 end
 
 -- Into a folder; the one shown.

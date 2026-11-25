@@ -7,6 +7,7 @@ local bin = require("core/bin")
 local colours = require("core/colours")
 local exchange = require("core/exchange")
 local operations = require("core/operations")
+local panes = require("core/panes")
 local paths = require("core/paths")
 local selection = require("core/selection")
 local menu = require("ui/menu")
@@ -82,11 +83,25 @@ function M.on_entry(e: any, by_key: boolean?)
             add { text = "Show in its folder", act = function() browser.go(paths.parent(e.path) or "/", e.path) end }
         end
     end
+    if #list == 1 and e.dir and not e.broken then
+        add { text = "Open in a new tab", act = function() panes.new_tab(e.path) end }
+        add {
+            text = if g.untracked(panes.two) then "Open in the other pane" else "Open beside",
+            act = function()
+                local other = g.untracked(panes.other)
+                if other then other.go(e.path) else panes.split(e.path) end
+            end,
+        }
+    end
     local folder = if #list == 1 and e.dir then e.path else (paths.parent(e.path) or here())
     add { text = "Open in the terminal", keys = "F4", act = function() browser.terminal(folder) end }
     add "-"
     add { text = "Cut", keys = "Ctrl X", act = function() exchange.cut(list) end }
     add { text = "Copy", keys = "Ctrl C", act = function() exchange.copy(list) end }
+    if g.untracked(panes.two) then
+        add { text = "Move to the other pane", keys = "F6", act = function() operations.across("move") end }
+        add { text = "Copy to the other pane", keys = "⇧ F6", act = function() operations.across("copy") end }
+    end
     if #list == 1 and e.dir then
         add { text = "Paste into it", off = not holds(), act = function() operations.paste(e.path) end }
     end
@@ -130,12 +145,14 @@ function M.on_place(path: string, go: () -> ())
     if path == paths.TRASH then
         show {
             { text = "Open", act = go },
+            { text = "Open in a new tab", act = function() panes.new_tab(path) end },
             { text = "Empty the trash", off = g.untracked(bin.count) == 0, act = operations.empty },
         }
         return
     end
     show {
         { text = "Open", act = go },
+        { text = "Open in a new tab", act = function() panes.new_tab(path) end },
         { text = "Open in the terminal", act = function() browser.terminal(path) end },
         "-",
         { text = "Paste into it", off = not holds(), act = function() operations.paste(path) end },

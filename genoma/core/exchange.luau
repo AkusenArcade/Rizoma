@@ -162,7 +162,7 @@ M.carried = function(): { string } return {} end
 
 -- The folder a drag is over, whether it was begun here, and whether what it
 -- carries is on that folder's disk (nil: not known yet).
-export type Over = { folder: string, own: boolean, same: boolean? }
+export type Over = { folder: string, own: boolean, same: boolean?, who: string }
 local over = g.signal(nil :: Over?)
 M.over = over
 
@@ -197,8 +197,9 @@ M.dropped = function(_: { string }, _: string, _: Verb) end
 local OPEN_AFTER = 0.8
 
 -- A node that takes what is dragged: props for it. `folder()` is where it
--- would go, nil for nowhere; `opens`: held over, it is gone into.
-function M.target(node: { [any]: any }, folder: () -> string?, opens: boolean?): { [any]: any }
+-- would go, nil for nowhere; `who` it is, among what may stand for one folder;
+-- held over, `opens(folder)`.
+function M.target(node: { [any]: any }, who: string, folder: () -> string?, opens: ((folder: string) -> ())?): { [any]: any }
     local waiting: any = nil
     local hovered: string? = nil
     local function stop()
@@ -211,26 +212,26 @@ function M.target(node: { [any]: any }, folder: () -> string?, opens: boolean?):
         hovered = if on then f else nil
         local now = g.untracked(function() return over.value end)
         if not on then
-            if now and now.folder == f then over.value = nil end
+            if now and now.folder == f and now.who == who then over.value = nil end
             return
         end
         if f == nil then
             over.value = nil
             return
         end
-        over.value = { folder = f, own = own, same = nil }
+        over.value = { folder = f, own = own, same = nil, who = who }
         local list = M.carried()
         if f == paths.TRASH then return end
         if own and #list > 0 then
             files:same_disk(list, f, function(same: boolean)
                 local o = g.untracked(function() return over.value end)
-                if o and o.folder == f then over.value = { folder = f, own = o.own, same = same } end
+                if o and o.folder == f then over.value = { folder = f, own = o.own, same = same, who = who } end
             end)
         end
         if opens and not (own and not M.takes(f, list)) then
             waiting = g.after(OPEN_AFTER, function()
                 waiting = nil
-                if f ~= g.untracked(function() return browser.here.value end) then browser.go(f) end
+                opens(f)
             end)
         end
     end
@@ -251,7 +252,7 @@ function M.target(node: { [any]: any }, folder: () -> string?, opens: boolean?):
             M.dropped(list, f, drop.action)
             return
         end
-        if o == nil or o.folder ~= f then o = { folder = f, own = true, same = nil } end
+        if o == nil or o.folder ~= f then o = { folder = f, own = true, same = nil, who = who } end
         local m = g.untracked(g.modifiers)
         if m.ctrl or m.shift or f == paths.TRASH or (o :: Over).same ~= nil then
             M.dropped(list, f, g.untracked(function() return verb_of(o :: Over) end))
@@ -264,15 +265,16 @@ function M.target(node: { [any]: any }, folder: () -> string?, opens: boolean?):
         stop()
         -- What it stood for may be gone already: what it was over is known.
         local o = g.untracked(function() return over.value end)
-        if o and o.folder == hovered then over.value = nil end
+        if o and o.folder == hovered and o.who == who then over.value = nil end
     end)
     return node
 end
 
--- Whether a drag that this folder would take is over it.
-function M.welcome(folder: string): boolean
+-- Whether a drag that this folder would take is over it, where `who` stands
+-- for it.
+function M.welcome(who: string, folder: string): boolean
     local o = over.value
-    return o ~= nil and o.folder == folder and not (o.own and not M.takes(folder, g.untracked(M.carried)))
+    return o ~= nil and o.folder == folder and o.who == who and not (o.own and not M.takes(folder, g.untracked(M.carried)))
 end
 
 return M

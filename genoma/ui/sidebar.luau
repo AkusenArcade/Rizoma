@@ -3,6 +3,8 @@
 -- grows from its button where there is not.
 local g = require("@genoma")
 local browser = require("core/browser")
+local panes = require("core/panes")
+local paths = require("core/paths")
 local places = require("core/places")
 local exchange = require("core/exchange")
 local actions = require("ui/actions")
@@ -17,7 +19,7 @@ local PAD, BUTTON, ROW, ICON = 8, look.cell_height, 40, 22
 
 local function row(place: () -> any): any
     local over = g.signal(false)
-    local function welcome(): boolean return exchange.welcome(place().path) end
+    local function welcome(): boolean return exchange.welcome("place", place().path) end
     local function here(): boolean
         local p = places.of(browser.here.value)
         return p ~= nil and p.path == place().path
@@ -41,7 +43,8 @@ local function row(place: () -> any): any
         on_hover = function(on: boolean) over.value = on end,
         on_press = function() end,
         on_click = function(button: number)
-            if button == 272 then M.chose(g.untracked(place).path)
+            if button == 274 then panes.new_tab(g.untracked(place).path, true)
+            elseif button == 272 then M.chose(g.untracked(place).path)
             elseif button == 273 then actions.on_place(g.untracked(place).path, function() M.chose(g.untracked(place).path) end)
             end
         end,
@@ -58,7 +61,9 @@ local function row(place: () -> any): any
             weight = function() return if here() then 700 else 500 end,
             tracking = 0.02,
         },
-    }, function() return place().path end, true))
+    }, "place", function() return place().path end, function(path: string)
+        if path ~= paths.TRASH then browser.go(path) end
+    end))
 end
 
 local function group(name: string): any

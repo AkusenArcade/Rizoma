@@ -11,6 +11,7 @@ local colours = require("core/colours")
 local config = require("core/config")
 local exchange = require("core/exchange")
 local operations = require("core/operations")
+local panes = require("core/panes")
 local format = require("core/format")
 local paths = require("core/paths")
 local selection = require("core/selection")
@@ -29,6 +30,7 @@ local jobs_cell = require("ui/jobs_cell")
 local menu = require("ui/menu")
 local rename = require("ui/rename")
 local swatches = require("ui/swatches")
+local tabs = require("ui/tabs")
 local preview = require("ui/preview")
 local view_cell = require("ui/view_cell")
 
@@ -38,23 +40,34 @@ local WIDE = 800
 
 local area = g.signal({ w = 1100, h = 700 })
 local floating = g.signal(false)
-local filtering = g.signal(false)
 
 local function pinned(): boolean return config.get("places") and area.value.w >= WIDE end
 local function left(): number return if pinned() then E + sidebar.WIDTH + GAP else E end
 -- What the folder and its preview share; with less than this, the preview
 -- floats over the folder.
 local SHARED = 660
+-- Two panes side by side want this; with less, the one that has the keys is
+-- alone.
+local BESIDE, SEAM = 560, 25
 local function across_all(): number return area.value.w - left() - E end
 local peeking = g.signal(false)
-local function roomy(): boolean return across_all() >= SHARED end
+local function roomy(): boolean return across_all() >= SHARED + (if panes.two() then 300 else 0) end
 local function preview_pinned(): boolean return config.get("preview") and roomy() end
 local function width(): number
     return math.max(120, across_all() - (if preview_pinned() then preview.WIDTH + GAP else 0))
 end
-local top = E + H + GAP
+-- The bar of the ways and the path, then the tabs where there are any, then
+-- the panes.
+local TABS = E + H + GAP - 2
+local function top(): number return E + H + GAP + (if tabs.any() then tabs.HEIGHT + GAP - 2 else 0) end
 -- The folder ends above what floats at the foot: nothing is read through it.
-local function height(): number return math.max(80, area.value.h - top - E - H - 8) end
+local function height(): number return math.max(80, area.value.h - top() - E - H - 8) end
+local function beside(): boolean return panes.two() and width() >= BESIDE end
+-- Where a pane is and how wide: nil while it is not seen.
+local function pane_w(): number return if beside() then math.floor((width() - SEAM) / 2) else width() end
+local function pane_x(p: any): number
+    return left() + (if beside() and panes.shown()[2] == p then pane_w() + SEAM else 0)
+end
 
 g.watch(pinned, function(on: boolean) if on then floating.value = false end end)
 g.watch(preview_pinned, function(on: boolean) if on then peeking.value = false end end)
@@ -68,37 +81,33 @@ end
 
 -- Whether the keys are the field's: until one of what was found is chosen, and
 -- again as soon as something is typed.
-local looking = g.signal(true)
 local function filter(text: string)
     browser.filter.value = text
-    looking.value = true
-    if text ~= "" then filtering.value = true end
+    browser.typing.value = true
+    if text ~= "" then browser.filtering.value = true end
 end
 local function stop_filtering()
-    filtering.value = false
+    browser.filtering.value = false
     g.batch(function()
         browser.filter.value = ""
         browser.only.value = ""
     end)
 end
-g.watch(function() return filtering.value end, function(on: boolean) if on then looking.value = true end end)
--- Another folder is another search.
-g.watch(function() return browser.here.value end, function() filtering.value = false end)
+g.watch(function() return browser.filtering.value end, function(on: boolean) if on then browser.typing.value = true end end)
 -- The best guess stands ready for Return, until one is chosen instead: as more
 -- is found it stays the first.
-local guessed: string? = nil
 g.watch(function() return browser.filter.value .. "\0" .. browser.dir.count end, function()
     if g.untracked(function() return browser.filter.value end) == "" then return end
     local at = g.untracked(function() return browser.cursor.value end)
     local shown = g.untracked(function() return browser.index.value end)
-    if shown == nil or at == guessed then
+    if shown == nil or at == browser.guessed then
         local first = g.untracked(function() return browser.dir:at(1) end)
-        guessed = if first then first.path else nil
+        g.untracked(panes.active).guessed = if first then first.path else nil
         browser.stand(1)
     end
 end)
 g.watch(function() return browser.cursor.value end, function(at: string?)
-    if at ~= nil and at ~= guessed then looking.value = false end
+    if at ~= nil and at ~= browser.guessed then browser.typing.value = false end
 end)
 
 -- ---- A new folder -------------------------------------------------------------------
@@ -118,7 +127,7 @@ local function make_folder()
     operations.make_folder(name, function() naming.value = false end)
 end
 g.watch(function() return browser.here.value end, function() naming.value = false end)
-g.watch(function() return filtering.value end, function(on: boolean) if on then naming.value = false end end)
+g.watch(function() return browser.filtering.value end, function(on: boolean) if on then naming.value = false end end)
 
 -- ---- Keys ---------------------------------------------------------------------------
 
@@ -143,11 +152,11 @@ end
 
 local function across(): number
     return if g.untracked(function() return config.get("view") end) == "grid"
-        then g.untracked(function() return grid.columns.value end) else 1
+        then g.untracked(function() return browser.view.columns.value end) else 1
 end
 local function page(): number
     if g.untracked(function() return config.get("view") end) == "grid" then
-        return g.untracked(function() return grid.columns.value * grid.rows_in_view.value end)
+        return g.untracked(function() return browser.view.columns.value * browser.view.rows.value end)
     end
     return math.max(1, math.floor((g.untracked(height) - list.head) / list.row_height) - 1)
 end
@@ -181,6 +190,30 @@ local function toggle_places()
     end
 end
 
+local function toggle_panes()
+    if g.untracked(panes.two) then panes.join() else panes.split() end
+end
+
+-- The window goes with its last tab; what is being done to files would stop
+-- half way, so it is asked.
+local function quit()
+    if #g.untracked(function() return files.jobs end) == 0 then
+        g.quit()
+        return
+    end
+    browser.say {
+        text = "Something is still being done to files. Stop it and close?",
+        label = "Close",
+        act = function()
+            for _, j in g.untracked(function() return files.jobs end) do files:cancel(j.id) end
+            g.after(0.4, g.quit)
+        end,
+    }
+end
+local function close_tab()
+    if not panes.close() then quit() end
+end
+
 local function toggle_preview()
     if g.untracked(roomy) then
         toggle("preview")
@@ -202,7 +235,7 @@ local function escape()
         floating.value = false
     elseif g.untracked(function() return browser.notice.value end) ~= nil then
         browser.say(nil)
-    elseif g.untracked(function() return filtering.value or browser.looking() end) then
+    elseif g.untracked(function() return browser.filtering.value or browser.looking() end) then
         stop_filtering()
     else
         browser.leave()
@@ -230,9 +263,21 @@ local function key(name: string, text: string?, mods: any)
         local letter = string.lower(name)
         if letter == "h" then toggle("hidden")
         elseif letter == "l" then path_bar.editing.value = true
+        elseif letter == "t" then panes.new_tab()
+        elseif letter == "w" then close_tab()
+        elseif name == "Tab" then panes.step(1)
+        elseif name == "ISO_Left_Tab" then panes.step(-1)
+        elseif name == "Next" or name == "Prior" then
+            local by = if name == "Next" then 1 else -1
+            if mods.shift then
+                local at = table.find(g.untracked(function() return panes.tabs.value end), g.untracked(function() return panes.tab.value end)) or 1
+                panes.move(g.untracked(function() return panes.tab.value end), at + by)
+            else
+                panes.step(by)
+            end
         elseif letter == "f" then
-            filtering.value = true
-            looking.value = true
+            browser.filtering.value = true
+            browser.typing.value = true
         elseif letter == "r" then browser.dir:reload()
         elseif name == "1" then config.set("view", "grid")
         elseif name == "2" then config.set("view", "list")
@@ -264,6 +309,10 @@ local function key(name: string, text: string?, mods: any)
         return
     end
     if moved(name, mods, true) then return end
+    if name == "Tab" or name == "ISO_Left_Tab" then
+        panes.swap()
+        return
+    end
     if name == "Return" or name == "KP_Enter" then
         enter()
     elseif name == "BackSpace" then
@@ -272,7 +321,7 @@ local function key(name: string, text: string?, mods: any)
             -- Back to what was typed, one letter shorter.
             local last = utf8.offset(typed, -1) or #typed
             filter(string.sub(typed, 1, last - 1))
-        elseif g.untracked(function() return filtering.value end) then stop_filtering()
+        elseif g.untracked(function() return browser.filtering.value end) then stop_filtering()
         else browser.up() end
     elseif name == "Escape" then escape()
     elseif name == "F2" then
@@ -287,6 +336,8 @@ local function key(name: string, text: string?, mods: any)
         local e = g.untracked(browser.selected)
         if e then actions.on_entry(e, true) else actions.on_ground(true) end
     elseif name == "F5" then browser.dir:reload()
+    elseif name == "F3" then toggle_panes()
+    elseif name == "F6" then operations.across(if mods.shift then "copy" else "move")
     elseif name == "F9" then toggle_places()
     elseif name == "space" then toggle_preview()
     elseif name == "XF86Back" then browser.back()
@@ -300,78 +351,150 @@ end
 -- ---- The folder ---------------------------------------------------------------------
 
 -- Each folder is another one: it starts from its top, and comes in.
-local function folder(): any
+local function folder(pane: any): any
     local in_now = g.signal(false)
     g.after(0, function() in_now.value = true end)
     local view = g.untracked(function() return config.get("view") end)
     return g.box {
-        width = width,
+        width = pane_w,
         height = height,
         opacity = function() return if in_now.value then 1 else 0 end,
         offset_y = function() return if in_now.value then 0 else 4 end,
         transition = { opacity = "folder_in", offset_y = "folder_in" },
-        if view == "grid" then grid.new(width, height) else list.new(width, height),
+        if view == "grid" then grid.new(pane, pane_w, height) else list.new(pane, pane_w, height),
     }
 end
 
-local shown = g.computed(function(): { string }
-    local view = config.get("view")
-    return { `{view}:{if view == "grid" then config.get("icon") else 0}:{browser.dir.path}` }
-end)
-
 -- Why there is nothing to see, when there is nothing.
 local WORDS = { ["not found"] = "This folder is not there", ["permission denied"] = "This folder is not yours to read", ["not a folder"] = "This is not a folder" }
-local function empty_text(): string
-    local why = browser.dir.error
+local function empty_text(pane: any): string
+    local why = pane.dir.error
     if why then return (WORDS :: any)[why] or `This folder cannot be read: {why}` end
-    if browser.dir.count > 0 or browser.dir.loading then return "" end
-    if browser.in_trash() and browser.filter.value == "" then return "The trash is empty" end
-    if browser.looking() then
-        if browser.dir.searching then return "Looking in the folders below" end
-        return if browser.only.value ~= "" then "Nothing of that colour" else "Nothing by that name"
+    if pane.dir.count > 0 or pane.dir.loading then return "" end
+    if pane.in_trash() and pane.filter.value == "" then return "The trash is empty" end
+    if pane.looking() then
+        if pane.dir.searching then return "Looking in the folders below" end
+        return if pane.only.value ~= "" then "Nothing of that colour" else "Nothing by that name"
     end
-    if browser.dir.total > 0 then return "Only hidden files" end
+    if pane.dir.total > 0 then return "Only hidden files" end
     return "Nothing here"
 end
 
-local content = g.box(exchange.target({
+-- A pane: its folder, and the ground it stands on.
+-- Dragged from here, it is here already.
+local function own_ground(pane: any): boolean
+    local o = exchange.over.value
+    if o == nil or not o.own then return false end
+    for _, p in g.untracked(exchange.carried) do
+        if paths.parent(p) ~= pane.here.value then return false end
+    end
+    return true
+end
+local function pane_node(item: () -> any, _: any): any
+    local pane = g.untracked(item)
+    local function seen(): boolean
+        if table.find(panes.shown(), pane) == nil then return false end
+        return beside() or panes.active() == pane
+    end
+    local function aside(): boolean return beside() and panes.active() ~= pane end
+    return g.box(exchange.target({
+        present = seen,
+        overlay = true,
+        attach = "corner",
+        offset_x = function() return pane_x(pane) end,
+        offset_y = top,
+        width = pane_w,
+        height = height,
+        -- The one the keys are not in stands back.
+        opacity = function() return if aside() then 0.6 else 1 end,
+        transition = { offset_x = "cell_open", offset_y = "cell_open", opacity = "ui_change" },
+        -- A press beside the entries stands on none.
+        on_press = function() panes.focus(pane) end,
+        on_click = function(button: number)
+            if button == 272 then pane.leave()
+            elseif button == 273 then
+                pane.leave()
+                actions.on_ground()
+            elseif button == 275 then pane.back()
+            elseif button == 276 then pane.forward()
+            end
+        end,
+        g.each {
+            direction = "column",
+            items = function(): { string }
+                local view = config.get("view")
+                return { `{view}:{if view == "grid" then config.get("icon") else 0}:{pane.dir.path}` }
+            end,
+            key = function(k: string) return k end,
+            row = function(_) return folder(pane) end,
+        },
+        g.box {
+            present = function() return empty_text(pane) ~= "" end,
+            overlay = true,
+            attach = "center",
+            g.text {
+                text = function() return empty_text(pane) end,
+                color = look.text_faint,
+                font = look.expressive,
+                size = look.font_label,
+                italic = true,
+            },
+        },
+        -- What is let go here goes into this folder.
+        g.capsule {
+            overlay = true,
+            attach = "corner",
+            present = function() return exchange.welcome(`pane:{pane.id}`, pane.here.value) and not own_ground(pane) end,
+            width = pane_w,
+            height = height,
+            radius = 14,
+            fill = function() return g.colour.alpha(look.primary(), 0.06) end,
+            rim_top = look.primary,
+            rim_bottom = look.primary,
+        },
+    }, `pane:{pane.id}`, function() return pane.here.value end))
+end
+
+-- Those of every tab, so one gone back to is as it was left.
+local content = g.each {
+    overlay = true,
+    attach = "corner",
+    items = function(): { any }
+        local out: { any } = {}
+        for _, t in panes.tabs.value do
+            for _, p in t.panes.value do table.insert(out, p) end
+        end
+        return out
+    end,
+    key = function(p: any) return p.id end,
+    row = pane_node,
+}
+
+-- Between two.
+local seam = g.capsule {
+    overlay = true,
+    attach = "corner",
+    present = beside,
+    offset_x = function() return left() + pane_w() + SEAM / 2 end,
+    offset_y = top,
+    width = 1,
+    height = height,
+    crisp = true,
+    radius = 0,
+    fill = function() return g.colour.alpha(look.line(), 0.8) end,
+    rim_top = look.CLEAR,
+    rim_bottom = look.CLEAR,
+    transition = { offset_y = "cell_open" },
+}
+
+local tab_row = g.box {
     overlay = true,
     attach = "corner",
     offset_x = left,
-    offset_y = top,
-    width = width,
-    height = height,
+    offset_y = TABS,
     transition = { offset_x = "cell_open" },
-    -- A press beside the entries stands on none.
-    on_press = function() end,
-    on_click = function(button: number)
-        if button == 272 then browser.leave()
-        elseif button == 273 then
-            browser.leave()
-            actions.on_ground()
-        elseif button == 275 then browser.back()
-        elseif button == 276 then browser.forward()
-        end
-    end,
-    g.each {
-        direction = "column",
-        items = function() return shown.value end,
-        key = function(k: string) return k end,
-        row = function(_) return folder() end,
-    },
-    g.box {
-        present = function() return empty_text() ~= "" end,
-        overlay = true,
-        attach = "center",
-        g.text {
-            text = empty_text,
-            color = look.text_faint,
-            font = look.expressive,
-            size = look.font_label,
-            italic = true,
-        },
-    },
-}, function() return browser.here.value end))
+    tabs.new(function() return area.value.w - left() - E end),
+}
 
 -- ---- Above it -----------------------------------------------------------------------
 
@@ -418,23 +541,28 @@ local FIELD = 240
 -- Beside the field, the colours: one pressed shows only what is marked so.
 local COLOURS = swatches.width(#colours.list) + 24
 local function colours_shown(): boolean
-    return filtering.value and not browser.in_trash() and width() > 520
+    return browser.filtering.value and not browser.in_trash() and width() > 520
 end
 -- What the cells on the right take.
 local function right_w(): number return if jobs_cell.there.value then H * 2 + 8 else H end
 -- A question needs the room its answers take.
 local function asking(): boolean return browser.notice.value ~= nil and browser.notice.value.act ~= nil and not browser.notice.value.passing end
 local function wordless(): boolean
-    return width() < (if asking() then 1040 else 760) + (if filtering.value then COLOURS + 60 else 0)
+    return width() < (if asking() then 1000 else 700) + (if browser.filtering.value then COLOURS + 60 else 0)
 end
-local function button_w(label: string): number return foot_field.width(label, wordless()) end
+-- The ones that make something new lose their words first.
+local function brief(): boolean
+    return width() < (if asking() then 1300 else 1000) + (if browser.filtering.value then COLOURS + 60 else 0)
+end
+local function button_w(label: string, new: boolean?): number return foot_field.width(label, if new then brief() else wordless()) end
 local function field_w(): number
-    return math.min(FIELD, math.max(120, width() - right_w() - GAP * 2 - (look.action_height + 8) * 2))
+    return math.min(FIELD, math.max(120, width() - right_w() - GAP * 2 - (look.action_height + 8) * 4))
 end
 local function foot_room(): number
-    local used = (if filtering.value then field_w() else button_w("Filter")) + 8 + (if colours_shown() then COLOURS + 8 else 0) + button_w("Preview") + 8
+    local used = (if browser.filtering.value then field_w() else button_w("Filter")) + 8 + (if colours_shown() then COLOURS + 8 else 0) + button_w("Preview") + 8 + button_w("Two panes") + 8
         + (if browser.in_trash() then button_w("Put back") + 8 + button_w("Empty")
-            elseif naming.value then field_w() else button_w("New folder")) + GAP
+            elseif naming.value then field_w() else button_w("New folder", true))
+        + (if tabs.any() then 0 else 8 + button_w("New tab", true)) + GAP
     return math.max(120, width() - right_w() - GAP - used)
 end
 
@@ -443,14 +571,14 @@ local filter_button = foot_field.new {
     id = "filter",
     label = "Filter",
     glyph = "search",
-    open = function() return filtering.value end,
-    on_open = function() filtering.value = true end,
+    open = function() return browser.filtering.value end,
+    on_open = function() browser.filtering.value = true end,
     bare = wordless,
     room = field_w,
     placeholder = "Here and below",
     stop = "Stop filtering",
-    focused = function() return looking.value and not path_bar.editing.value and operations.renaming.value == nil and not menu.is_open() end,
-    on_take = function() looking.value = true end,
+    focused = function() return browser.typing.value and not path_bar.editing.value and operations.renaming.value == nil and not menu.is_open() end,
+    on_take = function() browser.typing.value = true end,
     text = function() return browser.filter.value end,
     on_change = function(text: string) browser.filter.value = text end,
     on_submit = enter,
@@ -484,11 +612,11 @@ local colour_filter = g.capsule {
 local naming_button = foot_field.new {
     id = "new-folder",
     label = "New folder",
-    glyph = "plus",
+    glyph = "new-folder",
     dashed = true,
     open = function() return naming.value end,
     on_open = new_folder,
-    bare = wordless,
+    bare = brief,
     room = field_w,
     placeholder = "Its name",
     stop = "No new folder",
@@ -579,7 +707,16 @@ local foot = g.box {
             lit = function() return preview_pinned() or peeking.value end,
             on_click = toggle_preview,
         },
+        ui.action {
+            id = "panes-button",
+            label = "Two panes",
+            glyph = "panes",
+            bare = wordless,
+            lit = panes.two,
+            on_click = toggle_panes,
+        },
         g.box { present = function() return not browser.in_trash() end, naming_button },
+
         ui.action {
             id = "restore",
             label = "Put back",
@@ -597,6 +734,16 @@ local foot = g.box {
             present = browser.in_trash,
             disabled = function() return bin.count() == 0 end,
             on_click = operations.empty,
+        },
+        -- Where there are tabs, their row has it.
+        ui.action {
+            id = "first-tab",
+            label = "New tab",
+            glyph = "new-tab",
+            kind = "dashed",
+            bare = brief,
+            present = function() return not tabs.any() end,
+            on_click = function() panes.new_tab() end,
         },
     },
     pill(
@@ -663,19 +810,21 @@ local function named_at(): any
     local r = operations.renaming.value
     local i = if r then browser.dir:index(r.path) else nil
     if i == nil then return nil end
-    local n = if config.get("view") == "grid" then grid.name_rect(i) else list.name_rect(i, width())
+    local p = panes.active()
+    local n = if config.get("view") == "grid" then grid.name_rect(p, i) else list.name_rect(p, i, pane_w())
     if n == nil then return nil end
-    n.x += left()
-    n.y += top
+    n.x += pane_x(p)
+    n.y += top()
     return n
 end
 
 local function stood_at(): any
     local i = browser.index.value
     if i == nil then return nil end
-    local r = if config.get("view") == "grid" then grid.rect(i) else list.rect(i, width())
+    local p = panes.active()
+    local r = if config.get("view") == "grid" then grid.rect(p, i) else list.rect(p, i, pane_w())
     if r.y + r.h < 0 or r.y > height() then return nil end
-    return { x = left() + r.x, y = top + r.y, w = r.w, h = r.h }
+    return { x = pane_x(p) + r.x, y = top() + r.y, w = r.w, h = r.h }
 end
 
 -- The menu, asked for by key, at what is stood on.
@@ -684,7 +833,7 @@ actions.at = function(items: any)
     if at then
         menu.open(items, at.x + at.w / 2, at.y + at.h / 2)
     else
-        menu.open(items, g.untracked(left) + 24, top + 24)
+        menu.open(items, g.untracked(left) + 24, g.untracked(top) + 24)
     end
 end
 
@@ -699,7 +848,7 @@ local preview_pane = preview.new {
         local o = stood_at()
         return if o and o.x + o.w / 2 > area.value.w / 2 then E else right
     end,
-    y = function() return top end,
+    y = top,
     height = height,
     origin = stood_at,
 }
@@ -709,7 +858,7 @@ local outside = g.box {
     overlay = true,
     attach = "corner",
     present = function() return floating.value end,
-    offset_y = top - GAP / 2,
+    offset_y = E + H + GAP / 2,
     width = function() return area.value.w end,
     height = function() return area.value.h end,
     on_press = function() end,
@@ -744,9 +893,29 @@ g.ipc("rizoma", {
         config.set(name, v)
         return "ok"
     end,
+    tab = function(...: string): string
+        local path = table.concat({ ... }, " ")
+        panes.new_tab(if path == "" then nil else paths.expand(path))
+        return "ok"
+    end,
+    panes = function(path: string?): string
+        if g.untracked(panes.two) then panes.join() else panes.split(path) end
+        return "ok"
+    end,
+    tabs = function(): string
+        return g.untracked(function(): string
+            local out: { string } = {}
+            for _, t in panes.tabs.value do
+                local list: { string } = {}
+                for i, p in t.panes.value do table.insert(list, (if t.at.value == i then "*" else "") .. paths.called(p.here.value)) end
+                table.insert(out, (if panes.tab.value == t then "> " else "  ") .. table.concat(list, " | "))
+            end
+            return table.concat(out, "\n")
+        end)
+    end,
     find = function(...: string): string filter(table.concat({ ... }, " ")) return "ok" end,
     only = function(key: string?): string
-        filtering.value = true
+        browser.filtering.value = true
         browser.only.value = key or ""
         return "ok"
     end,
@@ -764,7 +933,7 @@ local window = g.window {
     width = 1100,
     height = 700,
     min = { 420, 320 },
-    on_close = function() g.quit() end,
+    on_close = quit,
     g.capsule {
         grow = 1,
         radius = 0,
@@ -778,6 +947,8 @@ local window = g.window {
         on_key = key,
         on_size = function(w: number, h: number) area.value = { w = w, h = h } end,
         content,
+        seam,
+        tab_row,
         preview_pane,
         foot,
         header,
@@ -785,7 +956,7 @@ local window = g.window {
         sidebar.new {
             pinned = pinned,
             open = function() return floating.value end,
-            top = function() return top end,
+            top = function() return E + H + GAP end,
             height = function() return area.value.h end,
         },
         rename.new {

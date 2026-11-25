@@ -9,15 +9,17 @@ local colours = require("core/colours")
 local exchange = require("core/exchange")
 local operations = require("core/operations")
 local icons = require("core/icons")
+local panes = require("core/panes")
 local selection = require("core/selection")
 local look = require("ui/look")
 local ui = require("ui/controls")
 
 local M = {}
 
--- Where the last press was, for what it would drag.
+-- Where the last press was, for what it would drag: the entry, and its pane.
 local pressed = g.signal("")
 M.pressed = pressed
+M.pressed_in = g.signal(nil :: any)
 local function pressed_path(): string return g.untracked(function() return pressed.value end) end
 
 -- The colour an entry is marked with, or nil.
@@ -111,8 +113,8 @@ function M.picture(entry: () -> any, size: number, pictured: boolean): any
 end
 
 -- Whether a drag that would go into it is over it.
-function M.welcoming(e: any): boolean
-    return e ~= nil and e.dir and exchange.welcome(e.path)
+function M.welcoming(pane: any, e: any): boolean
+    return e ~= nil and e.dir and exchange.welcome(`entry:{pane.id}`, e.path)
 end
 
 function M.faded(e: any): number
@@ -125,8 +127,9 @@ end
 -- What a drag from the entry last pressed carries.
 exchange.carried = function(): { string }
     local path = pressed_path()
-    if path == "" then return {} end
-    return if g.untracked(function() return selection.has(path) end) then selection.list() else { path }
+    local pane = g.untracked(function() return M.pressed_in.value end)
+    if path == "" or pane == nil then return {} end
+    return if g.untracked(function() return pane.selection.has(path) end) then pane.selection.list() else { path }
 end
 
 -- A finger held on an entry starts choosing several: a tap is then one more
@@ -172,8 +175,9 @@ function M.menu(e: any)
 end
 
 -- What presses do to an entry, the same in both views: props for its node.
-function M.handlers(node: { [any]: any }, entry: () -> any): { [any]: any }
+function M.handlers(pane: any, node: { [any]: any }, entry: () -> any): { [any]: any }
     node.on_press = function(button: number, _: number, _: number, touch: boolean)
+        panes.focus(pane)
         local e = g.untracked(entry)
         if e == nil then return end
         touching = touch
@@ -186,6 +190,7 @@ function M.handlers(node: { [any]: any }, entry: () -> any): { [any]: any }
                 selection.only(e.path)
             end
         end
+        M.pressed_in.value = pane
         pressed.value = e.path
     end
     node.on_click = function(button: number, _: number, _: number, count: number)
@@ -193,6 +198,11 @@ function M.handlers(node: { [any]: any }, entry: () -> any): { [any]: any }
         if e == nil then return end
         if button == 275 then browser.back() return end
         if button == 276 then browser.forward() return end
+        if button == 274 then
+            -- Beside this one, not instead of it.
+            if e.dir and not e.deleted then panes.new_tab(e.path, true) end
+            return
+        end
         if button == 273 then M.menu(e) return end
         if button == 272 then M.clicked(e, count) end
     end
@@ -205,16 +215,16 @@ function M.handlers(node: { [any]: any }, entry: () -> any): { [any]: any }
     node.drag_files = function(): string
         local e = entry()
         -- Out of the trash a thing goes by being put back.
-        if e == nil or e.deleted or pressed.value ~= e.path then return "" end
-        return exchange.dragged(if selection.has(e.path) then selection.list() else { e.path })
+        if e == nil or e.deleted or pressed.value ~= e.path or M.pressed_in.value ~= pane then return "" end
+        return exchange.dragged(if pane.selection.has(e.path) then pane.selection.list() else { e.path })
     end
     node.drag_actions = "both"
     -- On a folder it goes into it, beside one where one is.
-    return exchange.target(node, function(): string?
+    return exchange.target(node, `entry:{pane.id}`, function(): string?
         local e = entry()
         if e == nil then return nil end
-        return if e.dir and not e.broken and not e.deleted then e.path else browser.here.value
-    end, true)
+        return if e.dir and not e.broken and not e.deleted then e.path else pane.here.value
+    end, pane.go)
 end
 
 return M

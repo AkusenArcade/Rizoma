@@ -8,6 +8,7 @@ local g = require("@genoma")
 local browser = require("core/browser")
 local completion = require("core/completion")
 local exchange = require("core/exchange")
+local panes = require("core/panes")
 local actions = require("ui/actions")
 local paths = require("core/paths")
 local look = require("ui/look")
@@ -44,9 +45,17 @@ end
 -- The new path beside the old one: what they share stays, what was added
 -- buds, and what one came out of retracts before it goes. Elsewhere
 -- entirely, the old way is simply no longer there.
+local seen_in: any = nil
 g.watch(function() return browser.here.value end, function(path: string)
     if clearing then clearing:stop() end
     clearing = nil
+    -- Another pane's way is not a step from this one's.
+    local pane = g.untracked(panes.active)
+    if pane ~= seen_in then
+        seen_in = pane
+        chain.value = shoots(paths.steps(path), 0)
+        return
+    end
     local before = alive(g.untracked(function() return chain.value end))
     local after = shoots(paths.steps(path), 0)
     local shared = 0
@@ -115,10 +124,10 @@ local function step(index: number, shoot: () -> any, list: () -> { Shoot }, last
         radius = H / 2,
         fill = look.glass,
         rim_top = function()
-            if exchange.welcome(shoot().path) then return look.primary() end
+            if exchange.welcome("step", shoot().path) then return look.primary() end
             return if current() then look.rim() elseif over.value then look.node() else look.line()
         end,
-        rim_bottom = function() return if exchange.welcome(shoot().path) then look.primary() else look.line() end,
+        rim_bottom = function() return if exchange.welcome("step", shoot().path) then look.primary() else look.line() end,
         -- The shape's own, over nothing: what takes the presses is inside.
         g.box(exchange.target({
             overlay = true,
@@ -133,7 +142,8 @@ local function step(index: number, shoot: () -> any, list: () -> { Shoot }, last
             on_hover = function(on: boolean) over.value = on end,
             on_press = function() end,
             on_click = function(button: number)
-                if button == 272 then pressed(g.untracked(shoot), g.untracked(last))
+                if button == 274 then panes.new_tab(g.untracked(shoot).path, true)
+                elseif button == 272 then pressed(g.untracked(shoot), g.untracked(last))
                 elseif button == 273 and not g.untracked(shoot).leaving then
                     local s = g.untracked(shoot)
                     actions.on_place(s.path, function() pressed(s, g.untracked(last)) end)
@@ -149,7 +159,7 @@ local function step(index: number, shoot: () -> any, list: () -> { Shoot }, last
                 weight = function() return if current() then 600 else 400 end,
                 transition = { color = "ui_change" },
             },
-        }, function() return if shoot().leaving then nil else shoot().path end, true)),
+        }, "step", function() return if shoot().leaving then nil else shoot().path end, function(path: string) browser.go(path) end)),
     }
     if index > 1 then
         node.overlay = true

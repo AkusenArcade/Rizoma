@@ -2,9 +2,7 @@
 -- What is seen under the pointer while files are dragged out: the first of
 -- them, one over the other, and how they are called or how many they are.
 local g = require("@genoma")
-local browser = require("core/browser")
 local exchange = require("core/exchange")
-local selection = require("core/selection")
 local look = require("ui/look")
 local entry_ui = require("ui/entry")
 
@@ -15,12 +13,13 @@ local ICON, STACK, STEP, TILT, NAME_MAX = 64, 3, 7, 7, 180
 -- What a drag begun on the pressed entry would carry.
 local carried = g.computed(function(): { entries: { any }, count: number }
     local path = entry_ui.pressed.value
-    if path == "" then return { entries = {}, count = 0 } end
-    if selection.has(path) then
-        return { entries = selection.entries(STACK), count = selection.count() }
+    local pane = entry_ui.pressed_in.value
+    if path == "" or pane == nil then return { entries = {}, count = 0 } end
+    if pane.selection.has(path) then
+        return { entries = pane.selection.entries(STACK), count = pane.selection.count() }
     end
-    local i = browser.dir:index(path)
-    local e = if i then browser.dir:at(i) else nil
+    local i = pane.dir:index(path)
+    local e = if i then pane.dir:at(i) else nil
     return if e then { entries = { e }, count = 1 } else { entries = {}, count = 0 }
 end)
 

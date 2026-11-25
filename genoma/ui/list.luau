@@ -3,12 +3,10 @@
 -- title sorts by it; pressed again, the other way round.
 local g = require("@genoma")
 local mime = require("@genoma/mime")
-local browser = require("core/browser")
 local config = require("core/config")
 local format = require("core/format")
 local look = require("ui/look")
 local ui = require("ui/controls")
-local selection = require("core/selection")
 local band = require("ui/band")
 local scroll_mark = require("ui/scroll_mark")
 local entry_ui = require("ui/entry")
@@ -81,22 +79,20 @@ local function title(key: string, label: string | () -> string, width: () -> num
     }
 end
 
--- The row under the pointer.
-local over = g.signal(nil :: number?)
-
-local function row(width: () -> number): (() -> number, any) -> any
+local function row(pane: any, width: () -> number): (() -> number, any) -> any
+    local over = pane.view.over
     return function(item: () -> number, _: any): any
-        local e = g.computed(function(): any return browser.dir:at(item()) end)
+        local e = g.computed(function(): any return pane.dir:at(item()) end)
         local function chosen(): boolean
             local it = e.value
-            return it ~= nil and selection.has(it.path)
+            return it ~= nil and pane.selection.has(it.path)
         end
         local function stood(): boolean
             local it = e.value
-            return it ~= nil and browser.cursor.value == it.path
+            return it ~= nil and pane.cursor.value == it.path
         end
         local function edge(): string
-            if entry_ui.welcoming(e.value) then return look.primary() end
+            if entry_ui.welcoming(pane, e.value) then return look.primary() end
             return if stood() and not chosen() then look.node() else look.CLEAR
         end
         local function name_w(): number
@@ -133,7 +129,7 @@ local function row(width: () -> number): (() -> number, any) -> any
             gap = GAP,
             radius = look.radius_well,
             fill = function()
-                if chosen() or entry_ui.welcoming(e.value) then return look.chosen() end
+                if chosen() or entry_ui.welcoming(pane, e.value) then return look.chosen() end
                 return if over.value == item() then look.hovered() else look.CLEAR
             end,
             rim_top = edge,
@@ -143,7 +139,7 @@ local function row(width: () -> number): (() -> number, any) -> any
                 direction = "row",
                 align = "center",
                 justify = "start",
-                g.box(entry_ui.handlers({
+                g.box(entry_ui.handlers(pane, {
                     role = "button",
                     height = ROW,
                     direction = "row",
@@ -199,13 +195,11 @@ local function row(width: () -> number): (() -> number, any) -> any
     end
 end
 
-local scrolled = g.signal(0)
-
-function M.new(width: () -> number, height: () -> number): any
+function M.new(pane: any, width: () -> number, height: () -> number): any
     local function tall(): number return math.max(ROW, height() - HEAD) end
     local scroller = scroll_mark.new { height = tall, x = function() return width() - 1 end }
     local function at(y: number): any
-        return if y >= 0 then browser.dir:at(math.floor(y / ROW) + 1) else nil
+        return if y >= 0 then pane.dir:at(math.floor(y / ROW) + 1) else nil
     end
     return g.box {
         direction = "column",
@@ -220,7 +214,7 @@ function M.new(width: () -> number, height: () -> number): any
             gap = GAP,
             title("name", "Name", function() return name_room(width()) + 38 end, "start"),
             title("size", "Size", function() return SIZE_W end, "end", function() return (wide(width())) end),
-            title("modified", function() return if browser.in_trash() then "Thrown away" else "Modified" end, function() return MODIFIED_W end, "start", function()
+            title("modified", function() return if pane.in_trash() then "Thrown away" else "Modified" end, function() return MODIFIED_W end, "start", function()
                 local _, modified = wide(width())
                 return modified
             end),
@@ -229,22 +223,22 @@ function M.new(width: () -> number, height: () -> number): any
                 return kind
             end),
         },
-        band.new({
-            scroll = function() return scrolled.value end,
+        band.new(pane, {
+            scroll = function() return pane.view.lined.value end,
             width = width,
             height = tall,
             mark = scroller.mark,
             row_at = function(y: number): number return math.floor(y / ROW) + 1 end,
-            rows = function() return browser.dir.count end,
+            rows = function() return pane.dir.count end,
             hits = function(_: number, y0: number, _: number, y1: number): { string }
                 return g.untracked(function(): { string }
                     local first, last = math.max(1, math.floor(y0 / ROW) + 1), math.floor(y1 / ROW) + 1
-                    return if first > browser.dir.count then {} else browser.dir:paths(first, last)
+                    return if first > pane.dir.count then {} else pane.dir:paths(first, last)
                 end)
             end,
             pressed = entry_ui.touched,
             over = function(y: number?)
-                over.value = if y and y >= 0 and y < ROW * browser.dir.count then math.floor(y / ROW) + 1 else nil
+                pane.view.over.value = if y and y >= 0 and y < ROW * pane.dir.count then math.floor(y / ROW) + 1 else nil
             end,
             ground = function(y: number, count: number): boolean
                 local e = g.untracked(function() return at(y) end)
@@ -270,31 +264,31 @@ function M.new(width: () -> number, height: () -> number): any
             fade_bottom = scroller.fade,
             row_height = ROW,
             on_scroll = function(offset: number, room: number)
-                scrolled.value = offset
+                pane.view.lined.value = offset
                 scroller.follow(offset, room)
             end,
-            count = function() return browser.dir.count end,
+            count = function() return pane.dir.count end,
             item = function(i: number) return i end,
             key = function(i: number) return i end,
             reveal = function()
-                return band.row.value or browser.index.value
+                return pane.view.banded.value or pane.index.value
             end,
             reveal_margin = scroll_mark.margin,
-            row = row(width),
+            row = row(pane, width),
         }),
     }
 end
 
 -- Where an entry is drawn, from the view's corner.
-function M.rect(index: number, width: number): { x: number, y: number, w: number, h: number }
-    return { x = 0, y = HEAD + (index - 1) * ROW - scrolled.value, w = width, h = ROW }
+function M.rect(pane: any, index: number, width: number): { x: number, y: number, w: number, h: number }
+    return { x = 0, y = HEAD + (index - 1) * ROW - pane.view.lined.value, w = width, h = ROW }
 end
 
 -- Where an entry's name is, and how wide.
-function M.name_rect(index: number, width: number): any
-    local e = browser.dir:at(index)
+function M.name_rect(pane: any, index: number, width: number): any
+    local e = pane.dir:at(index)
     if e == nil then return nil end
-    local r = M.rect(index, width)
+    local r = M.rect(pane, index, width)
     local w = g.text_width { text = e.name, font = look.expressive(), size = look.font_name, weight = look.weight_name }
     return { x = r.x + PAD + 38, y = r.y, w = math.min(math.ceil(w), name_room(width)), h = ROW, centred = false }
 end
