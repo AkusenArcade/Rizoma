@@ -6,6 +6,7 @@ local browser = require("core/browser")
 local places = require("core/places")
 local look = require("ui/look")
 local ui = require("ui/controls")
+local scroll_mark = require("ui/scroll_mark")
 
 local M = {}
 
@@ -121,6 +122,7 @@ function M.new(t: { [string]: any }): any
     g.watch(function() return there.value and shown() end, function(on: boolean)
         if on then g.after(0, function() grown.value = g.untracked(shown) end) else grown.value = false end
     end)
+    local scroller = scroll_mark.new { height = function() return full() - PAD * 2 end, x = function() return M.WIDTH - PAD - 2 end, room = function() return math.max(0, content.value - (full() - PAD * 2)) end }
     local function timing(): string return if grown.value then "cell_open" else "cell_close" end
 
     return g.capsule {
@@ -153,6 +155,10 @@ function M.new(t: { [string]: any }): any
             radius = look.radius_panel - PAD,
             scroll = "y",
             clip = true,
+            fade_bottom = scroller.fade,
+            on_scroll = function(_: number, y: number)
+                scroller.follow(y, 0)
+            end,
             direction = "column",
             align = "stretch",
             opacity = function() return if grown.value then 1 else 0 end,

@@ -55,11 +55,17 @@ end
 
 local function untracked<T>(f: () -> T): T return g.untracked(f) end
 
+-- How standing on an entry changes the selection: "only" it, "extend" the
+-- range to it, "keep" what is. Set by core/selection.
+export type How = "only" | "extend" | "keep"
+M.chosen = function(_: string?, _: How) end
+
 local function put(stop: Stop)
     g.batch(function()
         M.filter.value = ""
         M.cursor.value = stop.cursor
         here.value = stop.path
+        M.chosen(stop.cursor, "only")
     end)
     M.say(nil)
 end
@@ -102,6 +108,14 @@ end
 function M.back() step(back, forward) end
 function M.forward() step(forward, back) end
 
+-- A path that is a file's: the folder around it, standing on the file.
+g.watch(function() return M.dir.error end, function(why: string?)
+    if why ~= "not a folder" then return end
+    local at = untracked(function() return here.value end)
+    local parent = paths.parent(at)
+    if parent then put { path = parent, cursor = at } end
+end)
+
 -- Up, standing on the folder one came out of.
 function M.up()
     local at = untracked(function() return here.value end)
@@ -129,6 +143,32 @@ local function launch(app: any, path: string)
         app_id = app.id,
         on_token = function(token: string?) apps:launch(app.id, nil, { path }, token) end,
     }
+end
+
+-- Several at once: the files, by what opens them. Folders and programs are
+-- opened one at a time.
+local MOST = 40
+function M.open_all(entries: { any })
+    local by: { [string]: { string } } = {}
+    local n, left = 0, 0
+    for _, e in entries do
+        local app = if e.dir or e.broken then nil else mime:default(e.mime)
+        if app and not runs(e.mime) then
+            by[app.id] = by[app.id] or {}
+            table.insert(by[app.id], e.path)
+            n += 1
+        else
+            left += 1
+        end
+    end
+    if n > MOST then
+        M.say { text = `{n} files are too many to open at once` }
+        return
+    end
+    for id, paths in by do
+        g.activation_token { app_id = id, on_token = function(token: string?) apps:launch(id, nil, paths, token) end }
+    end
+    if left > 0 then M.say { text = `{left} left closed: folders and programs open one at a time` } end
 end
 
 function M.open(e: any)
@@ -169,16 +209,24 @@ function M.selected(): any
 end
 
 -- The cursor moved by places; from nowhere, to the first or the last.
-function M.move(by: number)
+function M.move(by: number, how: How?)
     local count = untracked(function() return M.dir.count end)
     if count == 0 then return end
     local i = untracked(function() return M.index.value end)
     local to = if i == nil then (if by > 0 then 1 else count) else math.clamp(i + by, 1, count)
-    M.stand(to)
+    M.stand(to, how)
 end
-function M.stand(place: number)
+function M.stand(place: number, how: How?)
     local e = untracked(function() return M.dir:at(place) end)
-    if e then M.cursor.value = e.path end
+    if e then
+        M.cursor.value = e.path
+        M.chosen(e.path, how or "only")
+    end
+end
+-- On nothing.
+function M.leave()
+    M.cursor.value = nil
+    M.chosen(nil, "only")
 end
 
 return M

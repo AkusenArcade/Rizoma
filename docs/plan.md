@@ -1,6 +1,6 @@
 # Rizoma — plan
 
-Status: phases 1 and 2 built, 2026-11-25 (`genoma/`). Pace: slow, no deadline.
+Status: phases 1 to 3 built, 2026-11-25 (`genoma/`). Pace: slow, no deadline.
 
 ## 1. What it is
 
@@ -115,9 +115,12 @@ As built (2026-11-25). No title bar, as every Genoma app:
 ```
 
 - **The path is a rhizome**: each folder a capsule, a thread between them.
-  Going into a folder grows a shoot from the last capsule; coming out, it
-  retracts. The current one, pressed, becomes a field (Ctrl+L); a deep path
-  keeps its start and as many of its last steps as fit.
+  Going into a folder buds a shoot out of the last capsule, its neck thinning
+  to the thread that stays; coming out, the last one is taken back first. The
+  current one, pressed, becomes a field (Ctrl+L), and the folders it may be
+  going to bud out of its foot: Tab completes, the arrows choose. A path that
+  is a file's is its folder, standing on it. A deep path keeps its start and as
+  many of its last steps as fit.
 - **Places**: the user's folders, the GTK bookmarks (read, not written yet),
   the computer; in Orbitron, as a menu is. Pinned beside the folder at 800
   wide and more; under that, or
@@ -134,6 +137,17 @@ As built (2026-11-25). No title bar, as every Genoma app:
   With nothing stood on, the folder's own. Read 0.12 s after the last step, so
   walking with the arrows reads nothing on the way.
 
+- **Lists longer than their room** fade at the foot while there is more, and
+  show a mark down their side while they move, as Bioma's do.
+- **Selection**: a click, Ctrl and Shift, the rubber band (from the ground
+  between the pictures, or a row's beside its name; past an edge the view goes on), the keys (Shift
+  reaches, Ctrl walks without choosing, Ctrl+Space, Ctrl+A, Ctrl+Shift+I), a
+  finger held on an entry, then taps. By path: it keeps through another order,
+  and what is no longer shown is no longer selected.
+- **Exchange**: Ctrl+C offers `text/uri-list`, `x-special/gnome-copied-files`
+  and the paths as text; dragged out, what is selected is given to be copied,
+  never to be moved. 50 000 selected in 30 ms, copied in 75.
+
 Responsive by the window's size: the sidebar collapses to a button, the list
 loses its type, then its date, then its size; the grid's columns are computed
 from the width. Touch (HDMI-A-1 is a touchscreen): long press = context menu,
@@ -142,7 +156,7 @@ a drag past a threshold moves, a tap selects.
 Keys: arrows, Home/End, Page Up/Down, Enter, BackSpace and Alt+↑ (up),
 Alt+←/→, Alt+Home, Ctrl+H, Ctrl+L, Ctrl+F or just typing (filter), Ctrl+1/2
 (grid, list), F5 or Ctrl+R, F9 (places),
-space (preview), Escape. With their phases: Ctrl+C/X/V,
+space (preview), Ctrl+C, Escape. With their phases: Ctrl+X/V,
 F2, Delete (trash), Shift+Delete (confirmed), Ctrl+T/W, Ctrl+Shift+N.
 
 What runs a program (executables, `.desktop`, AppImage, Windows programs,

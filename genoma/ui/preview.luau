@@ -10,6 +10,7 @@ local config = require("core/config")
 local format = require("core/format")
 local icons = require("core/icons")
 local paths = require("core/paths")
+local selection = require("core/selection")
 local look = require("ui/look")
 local ui = require("ui/controls")
 
@@ -27,6 +28,11 @@ local seen = g.signal(nil :: any)
 do
     local waiting: any = nil
     local function now(): any
+        -- Several chosen, they are seen together.
+        local n = selection.count()
+        if n > 1 then
+            return { name = `{n} selected`, path = `selection:{n}`, dir = false, link = false, broken = false, hidden = false, size = 0, modified = 0, mime = "", many = selection.entries(NAMES + 1), count = n, sum = selection.sum.value }
+        end
         local e = browser.selected()
         if e then return e end
         -- The folder one is in, as an entry.
@@ -40,7 +46,7 @@ do
             if waiting then waiting:stop() end
             waiting = nil
             local before = seen.value
-            if before == nil or before.path == e.path then
+            if before == nil or (before.path == e.path and not e.many) then
                 seen.value = e
                 return
             end
@@ -158,6 +164,42 @@ local function text_head(e: any, width: number, height: number): any
     }
 end
 
+-- Several entries: their first names.
+local function many_head(e: any, width: number, height: number): any
+    local names = math.max(1, math.min(NAMES, math.floor((height - 20) / 26)))
+    local shown = if e.count > names then names - 1 else e.count
+    local rows: { [any]: any } = { direction = "column", align = "stretch", gap = 4, padding = 10 }
+    for i = 1, math.min(shown, #e.many) do
+        local it = e.many[i]
+        table.insert(rows, g.box {
+            direction = "row",
+            align = "center",
+            gap = 8,
+            height = 22,
+            g.icon { width = 18, height = 18, icon = function() return icons.of(it, 24) end },
+            g.text { text = it.name, max_width = width - 60, ellipsize = "middle", color = look.text_muted, font = look.expressive, size = look.font_text },
+        })
+    end
+    if e.count > shown then
+        table.insert(rows, g.box {
+            height = 22,
+            direction = "row",
+            align = "center",
+            g.text { text = `and {e.count - shown} more`, color = look.text_faint, font = look.expressive, italic = true, size = look.font_text },
+        })
+    end
+    return g.capsule {
+        width = width,
+        radius = look.radius_well,
+        fill = function() return g.colour.alpha(look.background(), 0.8) end,
+        rim_top = look.CLEAR,
+        rim_bottom = look.CLEAR,
+        direction = "column",
+        align = "stretch",
+        g.box(rows),
+    }
+end
+
 local function folder_head(e: any, width: number, height: number): any
     -- Its own order and its own hidden files, whatever the window's are.
     local dir = g.directory { path = e.path, hidden = function() return config.get("hidden") end, watch = true }
@@ -243,11 +285,19 @@ local function fact(name: string, value: () -> string, human: boolean?): any
     }
 end
 
+function M.said(sum: any): string
+    local function some(n: number, one: string): string return `{n} {one}{if n == 1 then "" else "s"}` end
+    if sum.bytes == nil then return "" end
+    if sum.folders == 0 then return some(sum.files, "file") end
+    if sum.files == 0 then return some(sum.folders, "folder") end
+    return `{some(sum.folders, "folder")}, {some(sum.files, "file")}`
+end
+
 -- One entry, in a pane this wide and tall. Made again for each.
 local function page(e: any, width: number, height: () -> number): any
     local inner = width - PAD * 2
     local room = math.max(80, math.min(g.untracked(height) - 210, inner * 1.25))
-    local kind = kind_of(e)
+    local kind = if e.many then "many" else kind_of(e)
     local head: any, count: any = nil, nil
     if kind == "moving" then
         head = picture(function() return e.path end, e, inner, math.min(room, inner))
@@ -258,10 +308,12 @@ local function page(e: any, width: number, height: () -> number): any
         head = picture(function() return made.value end, e, inner, math.min(room, inner))
     elseif kind == "text" then
         head = text_head(e, inner, room)
+    elseif kind == "many" then
+        head = many_head(e, inner, room)
     elseif kind == "folder" then
         head, count = folder_head(e, inner, room)
     end
-    local opens = if e.dir or e.broken then nil else apps_mime:default(e.mime)
+    local opens = if e.dir or e.broken or e.many then nil else apps_mime:default(e.mime)
     local in_now = g.signal(false)
     g.after(0, function() in_now.value = true end)
     return g.box {
@@ -290,7 +342,7 @@ local function page(e: any, width: number, height: () -> number): any
                 weight = 600,
             },
             g.text {
-                text = if e.broken then "Link to nothing" else apps_mime:description(e.mime),
+                text = if e.broken then "Link to nothing" elseif e.many then M.said(e.sum) else apps_mime:description(e.mime),
                 max_width = inner,
                 color = look.text_muted,
                 font = look.expressive,
@@ -301,7 +353,10 @@ local function page(e: any, width: number, height: () -> number): any
             direction = "column",
             align = "stretch",
             fact("Inside", function() return if count then count() else "" end),
-            fact("Size", function() return if e.dir then "" else format.size(e.size) end),
+            fact("Size", function()
+                if e.many then return if e.sum.bytes and e.sum.files > 0 then format.size(e.sum.bytes) else "" end
+                return if e.dir then "" else format.size(e.size)
+            end),
             fact("Modified", function() return format.moment(e.modified) end),
             fact("Opens with", function() return if opens then opens.name else "" end, true),
         },

@@ -102,8 +102,10 @@ g.timing {
     ui_change = { duration = 0.18, curve = { 0.2, 0, 0, 1 } },
     cell_open = { duration = 0.25, curve = { 0.2, 0.9, 0.3, 1 } },
     cell_close = { duration = 0.15, curve = { 0.5, 0, 0.9, 0.5 } },
-    shoot_open = { duration = 0.22, curve = { 0.2, 0.9, 0.3, 1 } },
-    shoot_close = { duration = 0.15, curve = { 0.5, 0, 0.9, 0.5 } },
+    -- A shoot budding out of the capsule before it, each a little after the
+    -- one it grows from; its words once it is at size, its thread as the neck
+    -- thins (below). Coming back the words go first, then the thread, then the
+    -- shape; of several, the last one first.
     content_in = { duration = 0.12, delay = 0.12, curve = { 0.2, 0, 0, 1 } },
     content_out = { duration = 0.06, curve = { 0.4, 0, 1, 1 } },
     -- Put where it is to grow from, before it is seen.
@@ -111,5 +113,28 @@ g.timing {
     folder_in = { duration = 0.16, curve = { 0.2, 0, 0, 1 } },
 }
 M.CLOSE = 0.16
+-- How long `n` shoots take to go back.
+local BACK, AFTER = 0.28, 0.12
+function M.shoots_back(n: number): number return BACK + (math.min(n, 5) - 1) * AFTER end
+
+-- How many shoots that come together wait their turn.
+M.TURNS = 5
+do
+    local SHAPE, STAGGER = 0.36, 0.16
+    local set: { [string]: any } = {}
+    for i = 1, M.TURNS do
+        local back = (i - 1) * AFTER
+        set["shoot_close_" .. i] = { duration = 0.2, delay = back + 0.06, curve = { 0.5, 0, 0.8, 0.6 } }
+        set["neck_close_" .. i] = { duration = 0.14, delay = back + 0.06, curve = { 0.2, 0, 0.4, 1 } }
+        set["thread_close_" .. i] = { duration = 0.08, delay = back, curve = { 0.5, 0, 0.9, 0.5 } }
+        local from = (i - 1) * STAGGER
+        -- Slow to leave, so the neck is seen, and it parts last.
+        set["shoot_" .. i] = { duration = SHAPE, delay = from, curve = { 0.45, 0.05, 0.2, 1 } }
+        set["neck_" .. i] = { duration = SHAPE, delay = from + SHAPE * 0.15, curve = { 0.6, 0, 0.5, 1 } }
+        set["thread_" .. i] = { duration = 0.12, delay = from + SHAPE * 0.7, curve = { 0.2, 0.9, 0.3, 1 } }
+        set["shoot_words_" .. i] = { duration = 0.12, delay = from + SHAPE * 0.6, curve = { 0.2, 0, 0, 1 } }
+    end
+    g.timing(set)
+end
 
 return M

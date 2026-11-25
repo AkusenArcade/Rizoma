@@ -5,6 +5,9 @@ local g = require("@genoma")
 local browser = require("core/browser")
 local config = require("core/config")
 local look = require("ui/look")
+local selection = require("core/selection")
+local band = require("ui/band")
+local scroll_mark = require("ui/scroll_mark")
 local entry_ui = require("ui/entry")
 
 local M = {}
@@ -64,10 +67,16 @@ local function cell(entry: () -> any, icon: number, width: number, height: numbe
     local e = g.computed(entry)
     local function chosen(): boolean
         local it = e.value
+        return it ~= nil and selection.has(it.path)
+    end
+    -- The keys' place, when it is not among the chosen.
+    local function stood(): boolean
+        local it = e.value
         return it ~= nil and browser.cursor.value == it.path
     end
+    -- The picture and the name take the presses; the rest of the cell is the
+    -- folder's own ground, where a rubber band starts.
     return g.capsule {
-        role = "button",
         present = function() return e.value ~= nil end,
         width = width,
         height = height,
@@ -81,13 +90,12 @@ local function cell(entry: () -> any, icon: number, width: number, height: numbe
             if chosen() then return look.chosen() end
             return if over.value then look.hovered() else look.CLEAR
         end,
-        rim_top = function() return if chosen() then look.primary() else look.CLEAR end,
-        rim_bottom = function() return if chosen() then look.primary() else look.CLEAR end,
+        rim_top = function() return if chosen() then look.primary() elseif stood() then look.node() else look.CLEAR end,
+        rim_bottom = function() return if chosen() then look.primary() elseif stood() then look.node() else look.CLEAR end,
         transition = { fill = "ui_change" },
-        on_hover = function(on: boolean) over.value = on end,
-        on_press = function() end,
-        on_click = entry_ui.pressed(function() return e.value end),
-        g.box {
+        g.box(entry_ui.handlers({
+            role = "button",
+            on_hover = function(on: boolean) over.value = on end,
             direction = "column",
             align = "center",
             gap = 6,
@@ -98,7 +106,14 @@ local function cell(entry: () -> any, icon: number, width: number, height: numbe
                     local it = e.value
                     return if it then fit(it.name, width - PAD * 2, look.expressive()) else ""
                 end,
-                max_width = width - PAD * 2,
+                -- No wider than it is: what is beside a short name is ground.
+                max_width = function()
+                    local it = e.value
+                    local room = width - PAD * 2
+                    if it == nil then return room end
+                    local w = g.text_width { text = it.name, font = look.expressive(), size = look.font_name, weight = look.weight_name }
+                    return math.min(room, math.ceil(w) + 2)
+                end,
                 wrap = true,
                 text_align = "center",
                 color = look.text,
@@ -106,7 +121,7 @@ local function cell(entry: () -> any, icon: number, width: number, height: numbe
                 size = look.font_name,
                 weight = look.weight_name,
             },
-        },
+        }, function() return e.value end)),
     }
 end
 
@@ -130,18 +145,26 @@ function M.new(width: () -> number, height: () -> number): any
         M.columns.value = columns.value
         M.rows_in_view.value = math.max(1, math.floor(height() / (cell_h + GAP)))
     end)
-    return g.list {
+    local scroller = scroll_mark.new { height = height, x = function() return width() - 1 end }
+    local view = g.list {
         id = "entries",
+        clip = true,
+        fade_bottom = scroller.fade,
         width = width,
         height = height,
         gap = GAP,
         row_height = cell_h,
-        on_scroll = function(offset: number) scrolled.value = offset end,
+        on_scroll = function(offset: number, room: number)
+            scrolled.value = offset
+            scroller.follow(offset, room)
+        end,
         count = function() return math.ceil(browser.dir.count / columns.value) end,
         item = function(i: number) return i end,
         -- Another number across is another row.
         key = function(i: number) return `{columns.value}:{i}` end,
         reveal = function()
+            local banded = band.row.value
+            if banded then return banded end
             local i = browser.index.value
             return if i then math.ceil(i / columns.value) else nil
         end,
@@ -156,6 +179,32 @@ function M.new(width: () -> number, height: () -> number): any
             return g.box(node)
         end,
     }
+    local pitch = cell_h + GAP
+    local function row_at(y: number): number return math.floor(y / pitch) + 1 end
+    return band.new({
+        scroll = function() return scrolled.value end,
+        width = width,
+        height = height,
+        row_at = row_at,
+        rows = function() return math.ceil(browser.dir.count / columns.value) end,
+        hits = function(x0: number, y0: number, x1: number, y1: number): { string }
+            return g.untracked(function(): { string }
+                local c, step = columns.value, cell_w + gap()
+                -- The cells it touches, not the space between them.
+                local first = math.max(0, math.floor((x0 + step - cell_w) / step))
+                local last = math.min(c - 1, math.floor(x1 / step))
+                local out: { string } = {}
+                if first > last then return out end
+                for row = math.max(1, math.floor((y0 + GAP) / pitch) + 1), math.min(row_at(y1), math.ceil(browser.dir.count / c)) do
+                    for _, p in browser.dir:paths((row - 1) * c + first + 1, (row - 1) * c + last + 1) do
+                        table.insert(out, p)
+                    end
+                end
+                return out
+            end)
+        end,
+        mark = scroller.mark,
+    }, view)
 end
 
 return M

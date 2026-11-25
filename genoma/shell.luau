@@ -7,8 +7,10 @@
 local g = require("@genoma")
 local browser = require("core/browser")
 local config = require("core/config")
+local exchange = require("core/exchange")
 local format = require("core/format")
 local paths = require("core/paths")
+local selection = require("core/selection")
 local mime = require("@genoma/mime")
 local look = require("ui/look")
 local ui = require("ui/controls")
@@ -74,6 +76,10 @@ end)
 -- ---- Keys ---------------------------------------------------------------------------
 
 local function open_chosen()
+    if g.untracked(selection.count) > 1 then
+        browser.open_all(g.untracked(function() return selection.entries(1000) end))
+        return
+    end
     local e = g.untracked(browser.selected)
     if e then browser.open(e) end
 end
@@ -89,11 +95,19 @@ local function page(): number
     return math.max(1, math.floor((g.untracked(height) - list.head) / list.row_height) - 1)
 end
 
-local function moved(name: string): boolean
-    if name == "Down" then browser.move(across())
-    elseif name == "Up" then browser.move(-across())
-    elseif name == "Next" then browser.move(page())
-    elseif name == "Prior" then browser.move(-page())
+-- The keys that walk: with shift the selection reaches to where they come,
+-- with ctrl it stays as it is.
+local function moved(name: string, mods: any, aside: boolean): boolean
+    local how: browser.How = if mods.shift then "extend" elseif mods.ctrl then "keep" else "only"
+    if name == "Down" then browser.move(across(), how)
+    elseif name == "Up" then browser.move(-across(), how)
+    elseif name == "Next" then browser.move(page(), how)
+    elseif name == "Prior" then browser.move(-page(), how)
+    elseif not aside then return false
+    elseif name == "Left" then browser.move(-1, how)
+    elseif name == "Right" then browser.move(1, how)
+    elseif name == "Home" then browser.stand(1, how)
+    elseif name == "End" then browser.stand(g.untracked(function() return browser.dir.count end), how)
     else return false end
     return true
 end
@@ -130,7 +144,7 @@ local function escape()
     elseif g.untracked(function() return filtering.value or browser.filter.value ~= "" end) then
         stop_filtering()
     else
-        browser.cursor.value = nil
+        browser.leave()
     end
 end
 
@@ -139,7 +153,7 @@ end
 local function key(name: string, text: string?, mods: any)
     if mods.logo then return end
     if g.untracked(function() return path_bar.editing.value end) then
-        if name == "Escape" then path_bar.editing.value = false end
+        path_bar.key(name)
         return
     end
     if mods.ctrl then
@@ -150,6 +164,13 @@ local function key(name: string, text: string?, mods: any)
         elseif letter == "r" then browser.dir:reload()
         elseif name == "1" then config.set("view", "grid")
         elseif name == "2" then config.set("view", "list")
+        elseif letter == "a" then selection.all()
+        elseif letter == "i" and mods.shift then selection.invert()
+        elseif letter == "c" then exchange.copy()
+        elseif name == "space" then
+            local at = g.untracked(function() return browser.cursor.value end)
+            if at then selection.toggle(at) end
+        else moved(name, mods, true)
         end
         return
     end
@@ -162,12 +183,8 @@ local function key(name: string, text: string?, mods: any)
         end
         return
     end
-    if moved(name) then return end
-    if name == "Left" then browser.move(-1)
-    elseif name == "Right" then browser.move(1)
-    elseif name == "Home" then browser.stand(1)
-    elseif name == "End" then browser.stand(g.untracked(function() return browser.dir.count end))
-    elseif name == "Return" or name == "KP_Enter" then
+    if moved(name, mods, true) then return end
+    if name == "Return" or name == "KP_Enter" then
         local notice = g.untracked(function() return browser.notice.value end)
         if notice and notice.act then notice.act() else open_chosen() end
     elseif name == "BackSpace" then
@@ -228,7 +245,7 @@ local content = g.box {
     -- A press beside the entries stands on none.
     on_press = function() end,
     on_click = function(button: number)
-        if button == 272 then browser.cursor.value = nil
+        if button == 272 then browser.leave()
         elseif button == 275 then browser.back()
         elseif button == 276 then browser.forward()
         end
@@ -295,6 +312,11 @@ local header = g.box {
 local function foot_room(): number return math.max(160, width() - H - GAP) end
 
 local function said(): (string, string)
+    local n = selection.count()
+    if n > 1 and not (preview_pinned() or peeking.value) then
+        local sum = selection.sum.value
+        return `{n} selected`, if sum.bytes and sum.files > 0 then format.size(sum.bytes) else ""
+    end
     local e = browser.selected()
     -- The list says it in its columns, the preview in its own words.
     if e == nil or config.get("view") ~= "grid" or preview_pinned() or peeking.value then return "", "" end
@@ -464,6 +486,7 @@ g.ipc("rizoma", {
         local path = paths.expand(table.concat({ ... }, " "))
         browser.go(paths.parent(path) or "/", path)
         browser.cursor.value = path
+        selection.only(path)
         return "ok"
     end,
     here = function(): string return g.untracked(function() return browser.here.value end) end,
@@ -479,7 +502,7 @@ g.ipc("rizoma", {
         return "ok"
     end,
     key = function(name: string, ctrl: string?): string
-        key(name, if #name == 1 then name else nil, { ctrl = ctrl == "ctrl", alt = ctrl == "alt", shift = false, logo = false })
+        key(name, if #name == 1 then name else nil, { ctrl = ctrl == "ctrl", alt = ctrl == "alt", shift = ctrl == "shift", logo = false })
         return "ok"
     end,
 })
@@ -504,9 +527,9 @@ return g.window {
         on_key = key,
         on_size = function(w: number, h: number) area.value = { w = w, h = h } end,
         content,
-        header,
         preview_pane,
         foot,
+        header,
         outside,
         sidebar.new {
             pinned = pinned,

@@ -8,6 +8,9 @@ local config = require("core/config")
 local format = require("core/format")
 local look = require("ui/look")
 local ui = require("ui/controls")
+local selection = require("core/selection")
+local band = require("ui/band")
+local scroll_mark = require("ui/scroll_mark")
 local entry_ui = require("ui/entry")
 
 local M = {}
@@ -78,11 +81,17 @@ local function title(key: string, label: string, width: () -> number, justify: s
     }
 end
 
+-- The row under the pointer.
+local over = g.signal(nil :: number?)
+
 local function row(width: () -> number): (() -> number, any) -> any
     return function(item: () -> number, _: any): any
-        local over = g.signal(false)
         local e = g.computed(function(): any return browser.dir:at(item()) end)
         local function chosen(): boolean
+            local it = e.value
+            return it ~= nil and selection.has(it.path)
+        end
+        local function stood(): boolean
             local it = e.value
             return it ~= nil and browser.cursor.value == it.path
         end
@@ -102,8 +111,9 @@ local function row(width: () -> number): (() -> number, any) -> any
                 },
             }
         end
+        -- The picture and the name are the entry, dragged from there; the
+        -- rest of the row answers a click, and is where a rubber band starts.
         return g.capsule {
-            role = "button",
             width = width,
             height = ROW,
             padding_x = PAD,
@@ -114,29 +124,33 @@ local function row(width: () -> number): (() -> number, any) -> any
             radius = look.radius_well,
             fill = function()
                 if chosen() then return look.chosen() end
-                return if over.value then look.hovered() else look.CLEAR
+                return if over.value == item() then look.hovered() else look.CLEAR
             end,
-            rim_top = look.CLEAR,
-            rim_bottom = look.CLEAR,
-            on_hover = function(on: boolean) over.value = on end,
-            on_press = function() end,
-            on_click = entry_ui.pressed(function() return e.value end),
+            rim_top = function() return if stood() and not chosen() then look.node() else look.CLEAR end,
+            rim_bottom = function() return if stood() and not chosen() then look.node() else look.CLEAR end,
             g.box {
                 width = function() return name_room(width()) + 38 end,
                 direction = "row",
                 align = "center",
-                gap = 10,
-                opacity = function() return entry_ui.faded(e.value) end,
-                entry_ui.picture(function() return e.value end, 28, false),
-                g.text {
-                    text = function() return if e.value then e.value.name else "" end,
-                    max_width = function() return name_room(width()) end,
-                    ellipsize = "middle",
-                    color = look.text,
-                    font = look.expressive,
-                    size = look.font_name,
-                    weight = look.weight_name,
-                },
+                justify = "start",
+                g.box(entry_ui.handlers({
+                    role = "button",
+                    height = ROW,
+                    direction = "row",
+                    align = "center",
+                    gap = 10,
+                    opacity = function() return entry_ui.faded(e.value) end,
+                    entry_ui.picture(function() return e.value end, 28, false),
+                    g.text {
+                        text = function() return if e.value then e.value.name else "" end,
+                        max_width = function() return name_room(width()) end,
+                        ellipsize = "middle",
+                        color = look.text,
+                        font = look.expressive,
+                        size = look.font_name,
+                        weight = look.weight_name,
+                    },
+                }, function() return e.value end)),
             },
             figure(function()
                 local it = e.value
@@ -165,9 +179,17 @@ local function row(width: () -> number): (() -> number, any) -> any
     end
 end
 
-M._scrolled = function(_: number) end
+local scrolled = g.signal(0)
 
 function M.new(width: () -> number, height: () -> number): any
+    local function tall(): number return math.max(ROW, height() - HEAD) end
+    local scroller = scroll_mark.new { height = tall, x = function() return width() - 1 end }
+    -- Which way the keys walk: the row past the one stood on is kept in view
+    -- too, so it is never read through the fading foot.
+    local before = 0
+    local function at(y: number): any
+        return if y >= 0 then browser.dir:at(math.floor(y / ROW) + 1) else nil
+    end
     return g.box {
         direction = "column",
         align = "stretch",
@@ -190,28 +212,65 @@ function M.new(width: () -> number, height: () -> number): any
                 return kind
             end),
         },
-        g.list {
+        band.new({
+            scroll = function() return scrolled.value end,
+            width = width,
+            height = tall,
+            mark = scroller.mark,
+            row_at = function(y: number): number return math.floor(y / ROW) + 1 end,
+            rows = function() return browser.dir.count end,
+            hits = function(_: number, y0: number, _: number, y1: number): { string }
+                return g.untracked(function(): { string }
+                    local first, last = math.max(1, math.floor(y0 / ROW) + 1), math.floor(y1 / ROW) + 1
+                    return if first > browser.dir.count then {} else browser.dir:paths(first, last)
+                end)
+            end,
+            pressed = entry_ui.touched,
+            over = function(y: number?)
+                over.value = if y and y >= 0 and y < ROW * browser.dir.count then math.floor(y / ROW) + 1 else nil
+            end,
+            ground = function(y: number, count: number): boolean
+                local e = g.untracked(function() return at(y) end)
+                if e == nil then return false end
+                entry_ui.clicked(e, count)
+                return true
+            end,
+            held = function(y: number)
+                local e = g.untracked(function() return at(y) end)
+                if e then entry_ui.held(e) end
+            end,
+        }, g.list {
             id = "entries",
             width = width,
-            height = function() return math.max(ROW, height() - HEAD) end,
+            height = tall,
+            clip = true,
+            fade_bottom = scroller.fade,
             row_height = ROW,
-            on_scroll = function(offset: number) M._scrolled(offset) end,
+            on_scroll = function(offset: number, room: number)
+                scrolled.value = offset
+                scroller.follow(offset, room)
+            end,
             count = function() return browser.dir.count end,
             item = function(i: number) return i end,
             key = function(i: number) return i end,
-            reveal = function() return browser.index.value end,
+            reveal = function()
+                if band.row.value then return band.row.value end
+                local i = browser.index.value
+                if i == nil then return nil end
+                local by = if i > before then 1 elseif i < before then -1 else 0
+                before = i
+                return math.clamp(i + by, 1, math.max(1, browser.dir.count))
+            end,
             row = row(width),
-        },
+        }),
     }
 end
 
 -- Where an entry is drawn, from the view's corner.
-local scrolled = g.signal(0)
 function M.rect(index: number, width: number): { x: number, y: number, w: number, h: number }
     return { x = 0, y = HEAD + (index - 1) * ROW - scrolled.value, w = width, h = ROW }
 end
 
-M._scrolled = function(offset: number) scrolled.value = offset end
 M.row_height = ROW
 M.head = HEAD
 
