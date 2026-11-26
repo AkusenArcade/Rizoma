@@ -14,6 +14,12 @@ M.CLEAR = "#00000000"
 function M.background(): string return theme.get("background") end
 function M.text(): string return theme.get("text") end
 function M.primary(): string return theme.get("accent") end
+-- The desktop's second accent: what is chosen without being acted on (the
+-- tabs), so the primary stays the interactive components'.
+function M.secondary(): string
+    local c = theme.get("secondary")
+    return if type(c) == "string" and g.colour.parse(c) then c else M.primary()
+end
 
 function M.is_dark(): boolean
     local d = theme.desktop()
@@ -67,6 +73,8 @@ function M.gradient_bottom(hex: string): string
 end
 function M.primary_top(): string return M.gradient_top(M.primary()) end
 function M.primary_bottom(): string return M.gradient_bottom(M.primary()) end
+function M.secondary_top(): string return M.gradient_top(M.secondary()) end
+function M.secondary_bottom(): string return M.gradient_bottom(M.secondary()) end
 
 -- A cell's glass (cell.opacity 0.72 in Bioma), and one that floats over
 -- names, which must not be read through it.
@@ -141,6 +149,12 @@ g.timing {
     -- Put where it is to grow from, before it is seen.
     placed = { duration = 0, curve = { 0, 0, 1, 1 } },
     folder_in = { duration = 0.16, curve = { 0.2, 0, 0, 1 } },
+    -- The tabs' pill going to another tab (ui/tabs.luau): Bioma's `hop`
+    -- damped for the length it travels, on the edge that leads; the
+    -- trailing edge follows softer and barely past, so the pill stretches
+    -- on the way. As Floema's: the tabs of every Bioma-style app.
+    pill_lead = { spring = { stiffness = 420, damping = 28 } },
+    pill_trail = { spring = { stiffness = 230, damping = 27 } },
 }
 M.CLOSE = 0.16
 -- How long `n` shoots take to go back.
