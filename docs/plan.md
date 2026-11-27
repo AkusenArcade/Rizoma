@@ -315,8 +315,8 @@ Rust tests for the services; live runs on scratch folders.
 ## 8. Decisions (2026-11-18)
 
 - `app_id`: `dev.akusen.rizoma`.
-- Repository: `AkusenArcade/Rizoma` on GitHub, created now, private until
-  there is something to show.
+- Repository: `AkusenArcade/Rizoma` on GitHub, private until there was
+  something to show; public since 2026-11-27.
 - View: one global choice (grid or list, sort, hidden), as Nautilus does,
   not remembered per folder.
 - A colour is kept as an extended attribute of the file
