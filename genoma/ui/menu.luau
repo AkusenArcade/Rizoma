@@ -279,10 +279,10 @@ local function row(line: () -> Line, _: any): any
         },
         g.box {
             present = function() return item().more ~= nil end,
-            g.svg {
+            g.icon {
                 width = 14,
                 height = 14,
-                src = g.dir .. "/icons/chevron-down.svg",
+                icon = "icons/chevron-down",
                 rotate = function() return if open() then 180 else 0 end,
                 color = look.text_muted,
                 transition = { rotate = "ui_change" },

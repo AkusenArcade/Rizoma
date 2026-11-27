@@ -13,10 +13,14 @@ local CLEAR = look.CLEAR
 function M.glyph(name: string, size: number, lit: (() -> boolean)?, quiet: (() -> string)?): any
     local faint = quiet or look.text_muted
     local function on(): boolean return lit == nil or (lit :: any)() end
-    return g.svg {
+    -- Rasterised whole at the screen's pixels (g.icon, resvg), not drawn
+    -- as paths: thin strokes at this size come out clean only so. The
+    -- name is looked up from the app's folder (shell.luau's g.icon_dir),
+    -- under icons/, where no application's icon name reaches.
+    return g.icon {
         width = size,
         height = size,
-        src = g.dir .. "/icons/" .. name .. ".svg",
+        icon = "icons/" .. name,
         gradient_top = function() return if on() then look.primary_top() else faint() end,
         gradient_bottom = function() return if on() then look.primary_bottom() else faint() end,
     }

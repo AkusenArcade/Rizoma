@@ -89,7 +89,7 @@ local function row(place: () -> any): any
                 actions.on_place(p.path, function() M.chose(p.path) end, if bookmark then function() name_it(p) end else nil)
             end
         end,
-        ui.glyph(g.untracked(place).glyph, ICON, here, look.text_muted),
+        ui.glyph(g.untracked(place).glyph, ICON, here, look.text),
         g.text {
             present = function() return not naming() end,
             -- A menu's words, so the technical voice (Akusen, 2026-11-25); the
@@ -217,13 +217,29 @@ local function drive(v: () -> drives.Volume): any
             elseif button == 273 then actions.on_drive(it)
             end
         end,
-        g.svg {
+        -- The drive rasterised whole (g.icon: clean thin strokes), and over
+        -- it how full it is, a shape that moves (g.svg's part).
+        g.box {
             width = ICON,
             height = ICON,
-            src = g.dir .. "/icons/drive.svg",
-            color = ink,
             opacity = function() return if mounted() then 1 else 0.7 end,
-            parts = { level = { d = level, fill = ink, opacity = 0.45, transition = { d = "ui_change" } } },
+            g.icon {
+                overlay = true,
+                attach = "corner",
+                width = ICON,
+                height = ICON,
+                icon = "icons/drive",
+                color = ink,
+            },
+            g.svg {
+                overlay = true,
+                attach = "corner",
+                width = ICON,
+                height = ICON,
+                src = g.dir .. "/icons/drive-level.svg",
+                color = ink,
+                parts = { level = { d = level, fill = ink, opacity = 0.45, transition = { d = "ui_change" } } },
+            },
         },
         g.box {
             direction = "column",

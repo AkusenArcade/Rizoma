@@ -5,6 +5,8 @@
 --   genoma Rizoma/genoma                   (RIZOMA_FOLDER: where it opens)
 --   genoma ipc rizoma open <folder>        (GENOMA_IPC names the socket)
 local g = require("@genoma")
+-- The app's own drawings, by name (ui/controls.luau's glyph: "icons/…").
+g.icon_dir(g.dir)
 local bin = require("core/bin")
 local browser = require("core/browser")
 local colours = require("core/colours")
