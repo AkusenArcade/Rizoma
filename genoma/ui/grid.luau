@@ -53,7 +53,7 @@ M._fit = fit
 function M.rect(pane: any, index: number): { x: number, y: number, w: number, h: number }
     local c, p = pane.view.columns.value, pane.view.place.value
     local row, col = math.floor((index - 1) / c), (index - 1) % c
-    return { x = col * (p.cell_w + p.gap), y = row * p.pitch - pane.view.scrolled.value, w = p.cell_w, h = p.cell_h }
+    return { x = (p.margin or 0) + col * (p.cell_w + p.gap), y = row * p.pitch - pane.view.scrolled.value, w = p.cell_w, h = p.cell_h }
 end
 
 -- Where an entry's name is, and how wide: under its picture, in its middle.
@@ -156,19 +156,29 @@ end
 function M.new(pane: any, width: () -> number, height: () -> number): any
     local view_of = pane.view
     local icon = g.untracked(function() return config.get("icon") end)
-    local cell_w = math.max(icon + 56, 132)
+    -- As narrow as a picture and a little room for its name: as many across
+    -- as fit (Akusen, 2026-11-27: the wide cells left three across and wide
+    -- empty lanes between them on a laptop).
+    local cell_w = math.max(icon + 24, 104)
     local line = g.text_height { text = "X", font = g.untracked(look.expressive), size = look.font_name, weight = look.weight_name, width = 100 }
     local cell_h = math.ceil(icon + 6 + line * LINES + 2 + PAD * 2)
     local columns = g.computed(function(): number
         return math.max(1, math.floor((width() + GAP) / (cell_w + GAP)))
     end)
-    -- What is left over goes between the columns.
+    -- What is left over goes between the columns, up to pictures half their
+    -- size apart; past that, to both sides, the grid in the middle.
+    local most = math.max(GAP, math.max(40, icon * 0.5) - (cell_w - icon))
     local function gap(): number
         local c = columns.value
-        return if c > 1 then math.floor((width() - c * cell_w) / (c - 1)) else GAP
+        if c <= 1 then return GAP end
+        return math.min(most, math.floor((width() - c * cell_w) / (c - 1)))
+    end
+    local function margin(): number
+        local c = columns.value
+        return math.max(0, math.floor((width() - c * cell_w - (c - 1) * gap()) / 2))
     end
     g.effect(function()
-        view_of.place.value = { pitch = cell_h + GAP, cell_w = cell_w, cell_h = cell_h, gap = gap() }
+        view_of.place.value = { pitch = cell_h + GAP, cell_w = cell_w, cell_h = cell_h, gap = gap(), margin = margin() }
         view_of.columns.value = columns.value
         view_of.rows.value = math.max(1, math.floor(height() / (cell_h + GAP)))
     end)
@@ -198,7 +208,7 @@ function M.new(pane: any, width: () -> number, height: () -> number): any
         reveal_margin = scroll_mark.margin,
         row = function(item: () -> number, _)
             local c = g.untracked(function() return columns.value end)
-            local node: { [any]: any } = { direction = "row", align = "start", gap = gap }
+            local node: { [any]: any } = { direction = "row", align = "start", gap = gap, padding_left = margin }
             for k = 1, c do
                 table.insert(node, cell(pane, function(): any
                     return pane.dir:at((item() - 1) * c + k)
@@ -218,6 +228,9 @@ function M.new(pane: any, width: () -> number, height: () -> number): any
         hits = function(x0: number, y0: number, x1: number, y1: number): { string }
             return g.untracked(function(): { string }
                 local c, step = columns.value, cell_w + gap()
+                -- From the first column's edge.
+                local m = margin()
+                x0, x1 = x0 - m, x1 - m
                 -- The cells it touches, not the space between them.
                 local first = math.max(0, math.floor((x0 + step - cell_w) / step))
                 local last = math.min(c - 1, math.floor(x1 / step))
