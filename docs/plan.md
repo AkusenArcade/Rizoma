@@ -329,3 +329,25 @@ Rust tests for the services; live runs on scratch folders.
 ## 9. Open
 
 Nothing at the moment.
+
+## Archives (2026-11-27)
+
+At Akusen's word, as Nautilus has them. The work is Genoma's
+(`files:extract`, `files:compress`: libarchive, jobs like a copy, in the
+jobs cell, with pause, stop and nothing half made left behind).
+
+- **Opened**, an archive is extracted beside itself where Rizoma is what
+  opens archives (it declares their types; Settings → Apps in Bioma chooses
+  it), and so is one Rizoma is started with. One thing inside comes out as
+  itself, more in a folder named after the archive, under a name nothing
+  has ("photos (2)"); nothing comes out outside it.
+- **The right button**: on archives, "Extract here" and "Extract to…" (the
+  desktop's folder chooser); on anything, "Compress…".
+- **Compress…**: a cell grown from what is compressed: the name (one
+  thing's own, else the folder's), the kind — .zip (every system), a .zip
+  locked by a password (AES-256), .tar.xz, .7z — what each means, the
+  password when locked; Return or COMPRESS. A name already there is said
+  before, and the job never writes over one.
+- **Locked**: the jobs cell asks for the password in a field drawn as dots,
+  and again when it is not the one. A locked 7z or rar cannot be opened by
+  libarchive (nor by Nautilus): it is said so, not asked for.

@@ -3,6 +3,7 @@
 local g = require("@genoma")
 local mime = require("@genoma/mime")
 local browser = require("core/browser")
+local archives = require("core/archives")
 local bin = require("core/bin")
 local colours = require("core/colours")
 local drives = require("core/drives")
@@ -20,6 +21,8 @@ local M = {}
 M.properties = function(_: { string }) end
 -- Set by the shell: what opens the field of the new folder's name.
 M.new_folder = function() end
+-- Set by the shell: what asks how some entries are compressed.
+M.compress = function(_: { any }) end
 
 local function here(): string return g.untracked(function() return browser.here.value end) end
 local function holds(): boolean return g.untracked(exchange.holds) end
@@ -99,6 +102,22 @@ function M.on_entry(e: any, by_key: boolean?)
     end
     local folder = if #list == 1 and e.dir then e.path else (paths.parent(e.path) or here())
     add { text = "Open in the terminal", keys = "F4", act = function() browser.terminal(folder) end }
+    -- Archives, as Nautilus has them: extracted beside themselves or where
+    -- chosen; anything made into one.
+    local entries = if #list > 1 then g.untracked(function() return selection.entries(1000) end) else { e }
+    local all_archives = #entries > 0
+    for _, it in entries do
+        if not archives.is(it) then
+            all_archives = false
+            break
+        end
+    end
+    add "-"
+    if all_archives then
+        add { text = "Extract here", act = function() archives.extract(list) end }
+        add { text = "Extract to…", act = function() archives.extract_to(list) end }
+    end
+    add { text = "Compress…", act = function() M.compress(entries) end }
     add "-"
     add { text = "Cut", keys = "Ctrl X", act = function() exchange.cut(list) end }
     add { text = "Copy", keys = "Ctrl C", act = function() exchange.copy(list) end }

@@ -86,6 +86,10 @@ function M.open_all(entries: { any })
     if left > 0 then M.say { text = `{left} left closed: folders and programs open one at a time` } end
 end
 
+-- Set by core/archives: an archive opened where Rizoma opens archives is
+-- extracted beside itself, as Nautilus does; true when it was.
+M.extracts = function(_: any): boolean return false end
+
 function M.open(e: any)
     if e.deleted then
         M.say { text = `{e.name} is in the trash: put back, it can be opened`, label = "Restore", act = function() M.restore(e) end, passing = true }
@@ -99,6 +103,7 @@ function M.open(e: any)
         M.go(e.path)
         return
     end
+    if M.extracts(e) then return end
     local app = mime:default(e.mime)
     if app == nil then
         M.say { text = `No application opens {e.name} ({mime:description(e.mime)})` }

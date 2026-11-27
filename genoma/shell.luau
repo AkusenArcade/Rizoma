@@ -37,6 +37,8 @@ local tabs = require("ui/tabs")
 local places = require("core/places")
 local preview = require("ui/preview")
 local properties = require("ui/properties")
+local compress_cell = require("ui/compress_cell")
+local archives = require("core/archives")
 local view_cell = require("ui/view_cell")
 
 local E, GAP, H = look.margin_edge, look.gap, look.cell_height
@@ -262,6 +264,12 @@ local function key(name: string, text: string?, mods: any)
         if name == "Escape" or name == "Return" or name == "space" then properties.close() end
         return
     end
+    if g.untracked(compress_cell.is_open) then
+        compress_cell.key(name)
+        return
+    end
+    -- A locked archive's password is being typed: its field has the keys.
+    if g.untracked(jobs_cell.typing) then return end
     if g.untracked(function() return sidebar.naming.value end) ~= nil then
         if name == "Escape" then sidebar.naming.value = nil end
         return
@@ -597,7 +605,7 @@ local filter_button = foot_field.new {
     room = field_w,
     placeholder = "Here and below",
     stop = "Stop filtering",
-    focused = function() return browser.typing.value and not path_bar.editing.value and operations.renaming.value == nil and sidebar.naming.value == nil and not properties.is_open() and not menu.is_open() end,
+    focused = function() return browser.typing.value and not path_bar.editing.value and operations.renaming.value == nil and sidebar.naming.value == nil and not properties.is_open() and not compress_cell.is_open() and not jobs_cell.typing() and not menu.is_open() end,
     on_take = function() browser.typing.value = true end,
     text = function() return browser.filter.value end,
     on_change = function(text: string) browser.filter.value = text end,
@@ -641,7 +649,7 @@ local naming_button = foot_field.new {
     placeholder = "Its name",
     stop = "No new folder",
     select = "all",
-    focused = function() return not path_bar.editing.value and operations.renaming.value == nil and sidebar.naming.value == nil and not properties.is_open() and not menu.is_open() end,
+    focused = function() return not path_bar.editing.value and operations.renaming.value == nil and sidebar.naming.value == nil and not properties.is_open() and not compress_cell.is_open() and not jobs_cell.typing() and not menu.is_open() end,
     wrong = function() return files:check_name(new_name.value) ~= nil end,
     text = function() return new_name.value end,
     on_change = function(text: string) new_name.value = text end,
@@ -881,6 +889,14 @@ actions.properties = function(list: { string })
     local a = g.untracked(function() return area.value end)
     properties.open(list, e, if at and selection.has(list[1]) then at else { x = a.w / 2 - 40, y = a.h / 2 - 40, w = 80, h = 80 })
 end
+-- How some entries are compressed: from the one stood on, when it is among
+-- them.
+actions.compress = function(entries: { any })
+    if #entries == 0 then return end
+    local at = g.untracked(stood_at)
+    local a = g.untracked(function() return area.value end)
+    compress_cell.open(entries, if at and selection.has(entries[1].path) then at else { x = a.w / 2 - 40, y = a.h / 2 - 40, w = 80, h = 80 })
+end
 properties_asked = function()
     if g.untracked(browser.in_trash) then return end
     local list = selection.list()
@@ -922,6 +938,12 @@ local function show_here(mode: string, list: { string })
     local by: { [string]: { string } } = {}
     for _, p in list do
         local at = if mode == "open" then p else (paths.parent(p) or "/")
+        -- An archive given to open is extracted beside itself, its folder
+        -- shown: what Rizoma does to one opened inside it.
+        if mode == "open" and archives.is_path(p) then
+            at = paths.parent(p) or "/"
+            archives.extract({ p })
+        end
         if by[at] == nil then
             by[at] = {}
             table.insert(order, at)
@@ -1045,6 +1067,7 @@ local window = g.window {
         jobs_cell.new(function() return area.value end),
         view_cell.new(function() return area.value end),
         properties.new(function() return area.value end),
+        compress_cell.new(function() return area.value end),
         menu.new(function() return area.value end),
     },
 }

@@ -84,6 +84,8 @@ local DOING = { copy = "Copying", move = "Moving", link = "Linking", delete = "D
 local function title(j: Job): string
     local what = if j.count == 1 then "1 item" else `{j.count} items`
     if j.kind == "trash" then return `Moving {what} to the trash` end
+    if j.kind == "extract" then return if j.to then `Extracting into {paths.called(j.to)}` else "Extracting" end
+    if j.kind == "compress" then return `Compressing {what}` end
     local to = if j.to then ` to {paths.called(j.to)}` else ""
     return `{(DOING :: any)[j.kind] or j.kind} {what}{to}`
 end
@@ -117,7 +119,17 @@ end
 
 local ANSWER = { replace = "Replace", merge = "Merge", keep_both = "Keep both", skip = "Skip", retry = "Retry", cancel = "Stop" }
 -- What loses nothing is the one that stands out.
-local SAFE = { exists = "keep_both", failed = "retry", space = "retry" }
+local SAFE = { exists = "keep_both", failed = "retry", space = "retry", password = "retry" }
+
+-- The password a locked archive is asked for, as it is typed.
+local password = g.signal("")
+-- Whether the keys are the password's: a locked archive is asking.
+function M.typing(): boolean
+    for _, j in jobs.value do
+        if j.state == "asking" and j.question and j.question.kind == "password" then return true end
+    end
+    return false
+end
 
 local function asked(q: any): (string, string, string)
     if q.kind == "exists" then
@@ -130,6 +142,9 @@ local function asked(q: any): (string, string, string)
         return `{name} is already in {folder}`, `There   {seen(q.target)}`, `New   {seen(q.source)}`
     elseif q.kind == "space" then
         return "It does not fit there", `Needed   {format.size(q.needed or 0)}`, `Free   {format.size(q.available or 0)}`
+    elseif q.kind == "password" then
+        local name = paths.name(q.path)
+        return if q.wrong then `That is not the password of {name}` else `{name} is locked by a password`, "", ""
     end
     local why = q.error or ""
     return `{paths.name(q.path)} could not be done`, string.upper(string.sub(why, 1, 1)) .. string.sub(why, 2), ""
@@ -174,12 +189,51 @@ local function question(job: () -> Job?): any
             text(2, look.font_meta, look.text_muted, look.technical),
             text(3, look.font_meta, look.text_muted, look.technical),
         },
+        -- A locked archive: its password, never shown, Return opens it.
+        g.capsule {
+            present = function()
+                local it = q()
+                return it ~= nil and it.kind == "password"
+            end,
+            height = 34,
+            padding_x = 14,
+            direction = "row",
+            align = "center",
+            radius = look.round(17),
+            fill = look.glass,
+            rim_top = look.primary,
+            rim_bottom = look.primary,
+            g.field {
+                id = "job-password",
+                grow = 1,
+                size = look.font_label,
+                font = look.expressive,
+                color = look.text,
+                caret_color = look.primary,
+                selection_color = look.chosen,
+                placeholder = "Password",
+                secret = true,
+                focused = function()
+                    local it = q()
+                    return it ~= nil and it.kind == "password"
+                end,
+                text = function() return password.value end,
+                on_change = function(text: string) password.value = text end,
+                on_submit = function()
+                    local j = g.untracked(job)
+                    if j then
+                        files:answer(j.id, "retry", false, g.untracked(function() return password.value end))
+                        password.value = ""
+                    end
+                end,
+            },
+        },
         g.box {
             -- One answer for the rest of them, where there may be a rest.
             present = function()
                 local j = job()
                 local it = q()
-                return it ~= nil and it.kind ~= "space" and j ~= nil and (j.total_files > 1 or j.count > 1)
+                return it ~= nil and it.kind ~= "space" and it.kind ~= "password" and j ~= nil and (j.total_files > 1 or j.count > 1)
             end,
             direction = "row",
             align = "center",
@@ -203,13 +257,20 @@ local function question(job: () -> Job?): any
             key = function(a: string) return a end,
             row = function(answer: () -> string, _)
                 local a = g.untracked(answer)
+                local locked = (g.untracked(q) or { kind = "" }).kind == "password"
                 return ui.action {
                     id = "answer-" .. a,
-                    label = (ANSWER :: any)[a] or a,
+                    label = if locked and a == "retry" then "Open" else (ANSWER :: any)[a] or a,
                     kind = if a == (SAFE :: any)[(g.untracked(q) or { kind = "" }).kind] then "filled" else "outline",
                     on_click = function()
                         local j = g.untracked(job)
-                        if j then operations.answer(j.id, a, g.untracked(function() return for_all.value end)) end
+                        if j == nil then return end
+                        if locked and a == "retry" then
+                            files:answer(j.id, "retry", false, g.untracked(function() return password.value end))
+                            password.value = ""
+                        else
+                            operations.answer(j.id, a, g.untracked(function() return for_all.value end))
+                        end
                     end,
                 }
             end,
